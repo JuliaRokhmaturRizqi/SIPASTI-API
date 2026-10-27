@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PeriodeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -32,21 +33,22 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin Routes (Role: admin)
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:admin')->prefix('admin')->group(function () {
-        // Manajemen Periode Akademik (Dummy)
-        Route::post('/periode-akademik', function (Request $request) {
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Endpoint pembuatan periode akademik (Admin Only).',
-            ]);
-        });
+    Route::middleware('role:admin')->group(function () {
+        // Manajemen Periode Akademik (REST API Lengkap)
+        Route::get('/periode', [PeriodeController::class, 'index'])->name('api.periode.index');
+        Route::post('/periode', [PeriodeController::class, 'store'])->name('api.periode.store');
+        Route::put('/periode/{id}', [PeriodeController::class, 'update'])->name('api.periode.update');
+        Route::delete('/periode/{id}', [PeriodeController::class, 'destroy'])->name('api.periode.destroy');
 
-        // Validasi / Review Dokumen Pelaporan Prodi (Dummy)
-        Route::patch('/dokumen-pelaporan/{id}/validasi', function (Request $request, int $id) {
-            return response()->json([
-                'status'  => 'success',
-                'message' => "Endpoint validasi dokumen ID #{$id} (Admin Only).",
-            ]);
+        // Prefix /admin untuk endpoint administrasi lainnya
+        Route::prefix('admin')->group(function () {
+            // Validasi / Review Dokumen Pelaporan Prodi (Dummy)
+            Route::patch('/dokumen-pelaporan/{id}/validasi', function (Request $request, int $id) {
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => "Endpoint validasi dokumen ID #{$id} (Admin Only).",
+                ]);
+            });
         });
     });
 

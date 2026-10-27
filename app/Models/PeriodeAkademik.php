@@ -12,17 +12,14 @@ class PeriodeAkademik extends Model
 
     protected $table = 'periode_akademik';
 
+    public const STATUS_AKTIF    = 'Aktif';
+    public const STATUS_NONAKTIF = 'Nonaktif';
+    public const STATUS_ARSIP    = 'Arsip';
+
     protected $fillable = [
         'nama_periode',
-        'status_aktif',
+        'status',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'status_aktif' => 'boolean',
-        ];
-    }
 
     public function dokumenPelaporan(): HasMany
     {

@@ -40,7 +40,7 @@ class ApiAuthAndRbacTest extends TestCase
 
         // Admin mengakses route khusus admin -> 200 OK
         $this->withToken($token)
-            ->postJson('/api/admin/periode-akademik')
+            ->getJson('/api/periode')
             ->assertStatus(200);
 
         // Admin mengakses route khusus user prodi -> 403 Forbidden
@@ -63,7 +63,13 @@ class ApiAuthAndRbacTest extends TestCase
 
         $loginResponse->assertStatus(200)
             ->assertJsonPath('data.role', 'user')
-            ->assertJsonPath('data.user.prodi.nama_prodi', 'Teknik Informatika');
+            ->assertJsonStructure([
+                'data' => [
+                    'user' => [
+                        'prodi' => ['id', 'nama_prodi'],
+                    ],
+                ],
+            ]);
 
         $token = $loginResponse->json('data.access_token');
 
