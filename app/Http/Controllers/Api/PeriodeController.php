@@ -41,28 +41,33 @@ class PeriodeController extends Controller
 
     /**
      * POST /api/periode
-     * Menambah periode baru dengan aturan Single-Active di dalam DB::transaction.
+     * Menambah periode baru:
+     * - Multi-Open: Beberapa periode boleh memiliki status_pelaporan = 'Buka' bersamaan.
+     * - Single-Default: Hanya boleh ada SATU periode dengan is_default = true.
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'nama_periode' => ['required', 'string', 'max:50', 'unique:periode_akademik,nama_periode'],
-            'status'       => ['nullable', Rule::in(['Aktif', 'Nonaktif', 'Arsip'])],
+            'nama_periode'     => ['required', 'string', 'max:50', 'unique:periode_akademik,nama_periode'],
+            'status_pelaporan' => ['nullable', Rule::in([PeriodeAkademik::STATUS_BUKA, PeriodeAkademik::STATUS_TUTUP])],
+            'is_default'       => ['nullable', 'boolean'],
         ]);
 
-        $status = $validated['status'] ?? PeriodeAkademik::STATUS_NONAKTIF;
+        $statusPelaporan = $validated['status_pelaporan'] ?? PeriodeAkademik::STATUS_TUTUP;
+        $isDefault       = (bool) ($validated['is_default'] ?? false);
 
         try {
-            $periode = DB::transaction(function () use ($validated, $status) {
-                // Aturan Single-Active: Nonaktifkan semua periode yang sedang Aktif terlebih dahulu
-                if ($status === PeriodeAkademik::STATUS_AKTIF) {
-                    PeriodeAkademik::where('status', PeriodeAkademik::STATUS_AKTIF)
-                        ->update(['status' => PeriodeAkademik::STATUS_NONAKTIF]);
+            $periode = DB::transaction(function () use ($validated, $statusPelaporan, $isDefault) {
+                // Aturan Single-Default: Jika is_default bernilai true, ubah semua periode lain menjadi false
+                if ($isDefault) {
+                    PeriodeAkademik::where('is_default', true)
+                        ->update(['is_default' => false]);
                 }
 
                 return PeriodeAkademik::create([
-                    'nama_periode' => $validated['nama_periode'],
-                    'status'       => $status,
+                    'nama_periode'     => $validated['nama_periode'],
+                    'status_pelaporan' => $statusPelaporan,
+                    'is_default'       => $isDefault,
                 ]);
             });
 
@@ -82,7 +87,9 @@ class PeriodeController extends Controller
 
     /**
      * PUT /api/periode/{id}
-     * Mengupdate data periode dengan aturan Single-Active di dalam DB::transaction.
+     * Mengupdate data periode:
+     * - Multi-Open: Beberapa periode boleh memiliki status_pelaporan = 'Buka' bersamaan.
+     * - Single-Default: Hanya boleh ada SATU periode dengan is_default = true.
      */
     public function update(Request $request, int $id): JsonResponse
     {
@@ -102,21 +109,27 @@ class PeriodeController extends Controller
                 'max:50',
                 Rule::unique('periode_akademik', 'nama_periode')->ignore($periode->id),
             ],
-            'status' => ['required', Rule::in(['Aktif', 'Nonaktif', 'Arsip'])],
+            'status_pelaporan' => ['required', Rule::in([PeriodeAkademik::STATUS_BUKA, PeriodeAkademik::STATUS_TUTUP])],
+            'is_default'       => ['sometimes', 'boolean'],
         ]);
 
+        $isDefault = array_key_exists('is_default', $validated)
+            ? (bool) $validated['is_default']
+            : $periode->is_default;
+
         try {
-            $updatedPeriode = DB::transaction(function () use ($periode, $validated) {
-                // Aturan Single-Active: Jika diubah menjadi Aktif, ubah periode Aktif lainnya menjadi Nonaktif
-                if ($validated['status'] === PeriodeAkademik::STATUS_AKTIF) {
+            $updatedPeriode = DB::transaction(function () use ($periode, $validated, $isDefault) {
+                // Aturan Single-Default: Jika is_default bernilai true, ubah semua periode lain menjadi false
+                if ($isDefault) {
                     PeriodeAkademik::where('id', '!=', $periode->id)
-                        ->where('status', PeriodeAkademik::STATUS_AKTIF)
-                        ->update(['status' => PeriodeAkademik::STATUS_NONAKTIF]);
+                        ->where('is_default', true)
+                        ->update(['is_default' => false]);
                 }
 
                 $periode->update([
-                    'nama_periode' => $validated['nama_periode'],
-                    'status'       => $validated['status'],
+                    'nama_periode'     => $validated['nama_periode'],
+                    'status_pelaporan' => $validated['status_pelaporan'],
+                    'is_default'       => $isDefault,
                 ]);
 
                 return $periode->fresh();
@@ -139,8 +152,9 @@ class PeriodeController extends Controller
     /**
      * DELETE /api/periode/{id}
      * Proteksi Hapus Data:
-     * - Jika sudah memiliki relasi di dokumen_pelaporan -> tolak hard delete (400) & ubah status menjadi 'Arsip'.
-     * - Jika belum memiliki relasi -> lakukan hard delete normal.
+     * - Jika sudah ada relasi ke dokumen_pelaporan -> tolak hard delete (400),
+     *   ubah status_pelaporan menjadi 'Tutup' dan is_default menjadi false.
+     * - Jika belum ada relasi -> lakukan hard delete normal.
      */
     public function destroy(int $id): JsonResponse
     {
@@ -159,12 +173,13 @@ class PeriodeController extends Controller
 
                 if ($hasDokumen) {
                     $periode->update([
-                        'status' => PeriodeAkademik::STATUS_ARSIP,
+                        'status_pelaporan' => PeriodeAkademik::STATUS_TUTUP,
+                        'is_default'       => false,
                     ]);
 
                     return response()->json([
                         'status'  => 'error',
-                        'message' => 'Periode tidak dapat dihapus karena sudah memiliki data pelaporan. Status diubah menjadi Arsip.',
+                        'message' => 'Periode tidak dapat dihapus karena menampung dokumen Prodi. Status diubah menjadi Tutup.',
                         'data'    => $periode->fresh(),
                     ], 400);
                 }

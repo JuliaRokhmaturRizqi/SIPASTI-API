@@ -40,10 +40,13 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Periode Akademik Aktif
+        // Periode Akademik Aktif (Multi-Open + Default Period)
         $periode = PeriodeAkademik::updateOrCreate(
             ['nama_periode' => '2026/2027 Ganjil'],
-            ['status' => PeriodeAkademik::STATUS_AKTIF]
+            [
+                'status_pelaporan' => PeriodeAkademik::STATUS_BUKA,
+                'is_default'       => true,
+            ]
         );
 
         // Inisialisasi 4 Tahap Dokumen Pelaporan untuk Prodi TI

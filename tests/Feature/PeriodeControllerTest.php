@@ -2,9 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\DokumenPelaporan;
 use App\Models\PeriodeAkademik;
-use App\Models\Prodi;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -31,45 +29,58 @@ class PeriodeControllerTest extends TestCase
                 'status',
                 'message',
                 'data' => [
-                    '*' => ['id', 'nama_periode', 'status', 'dokumen_pelaporan_count'],
+                    '*' => ['id', 'nama_periode', 'status_pelaporan', 'is_default', 'dokumen_pelaporan_count'],
                 ],
             ]);
     }
 
-    public function test_store_and_update_enforce_single_active_rule(): void
+    public function test_multi_open_allows_multiple_open_periods_and_single_default_enforces_unique_default(): void
     {
         Sanctum::actingAs($this->admin, ['admin']);
 
-        // Pastikan periode awal (2026/2027 Ganjil) berstatus Aktif
+        // Pastikan periode awal (2026/2027 Ganjil) berstatus Buka dan is_default = true
         $periodeAwal = PeriodeAkademik::where('nama_periode', '2026/2027 Ganjil')->firstOrFail();
-        $periodeAwal->update(['status' => 'Aktif']);
+        $periodeAwal->update([
+            'status_pelaporan' => 'Buka',
+            'is_default'       => true,
+        ]);
 
-        // Tambah periode baru dengan status 'Aktif'
+        // Tambah periode baru dengan status_pelaporan = 'Buka' dan is_default = true
         $storeResponse = $this->postJson('/api/periode', [
-            'nama_periode' => '2026/2027 Genap',
-            'status'       => 'Aktif',
+            'nama_periode'     => '2026/2027 Genap',
+            'status_pelaporan' => 'Buka',
+            'is_default'       => true,
         ]);
 
         $storeResponse->assertStatus(201)
-            ->assertJsonPath('data.status', 'Aktif');
+            ->assertJsonPath('data.status_pelaporan', 'Buka')
+            ->assertJsonPath('data.is_default', true);
 
         $periodeBaruId = $storeResponse->json('data.id');
 
-        // Periode awal harus otomatis berubah menjadi Nonaktif
-        $this->assertEquals('Nonaktif', $periodeAwal->fresh()->status);
+        // Multi-Open: Periode awal TETAP 'Buka' (tidak saling menimpa)
+        $this->assertEquals('Buka', $periodeAwal->fresh()->status_pelaporan);
 
-        // Update kembali periode awal menjadi Aktif via PUT /api/periode/{id}
+        // Single-Default: Periode awal otomatis berubah menjadi is_default = false
+        $this->assertFalse($periodeAwal->fresh()->is_default);
+        $this->assertEquals(1, PeriodeAkademik::where('is_default', true)->count());
+
+        // Update kembali periode awal menjadi is_default = true via PUT /api/periode/{id}
         $updateResponse = $this->putJson("/api/periode/{$periodeAwal->id}", [
-            'nama_periode' => '2026/2027 Ganjil',
-            'status'       => 'Aktif',
+            'nama_periode'     => '2026/2027 Ganjil',
+            'status_pelaporan' => 'Buka',
+            'is_default'       => true,
         ]);
 
         $updateResponse->assertStatus(200)
-            ->assertJsonPath('data.status', 'Aktif');
+            ->assertJsonPath('data.status_pelaporan', 'Buka')
+            ->assertJsonPath('data.is_default', true);
 
-        // Periode baru harus otomatis berubah menjadi Nonaktif, dan hanya ada 1 periode Aktif di tabel
-        $this->assertEquals('Nonaktif', PeriodeAkademik::findOrFail($periodeBaruId)->status);
-        $this->assertEquals(1, PeriodeAkademik::where('status', 'Aktif')->count());
+        // Periode baru harus otomatis berubah menjadi is_default = false, tapi status_pelaporan tetap 'Buka'
+        $periodeBaruFresh = PeriodeAkademik::findOrFail($periodeBaruId);
+        $this->assertFalse($periodeBaruFresh->is_default);
+        $this->assertEquals('Buka', $periodeBaruFresh->status_pelaporan);
+        $this->assertEquals(1, PeriodeAkademik::where('is_default', true)->count());
 
         // Cleanup periode baru (belum punya relasi dokumen_pelaporan -> Hard Delete 200 OK)
         $deleteUnused = $this->deleteJson("/api/periode/{$periodeBaruId}");
@@ -78,26 +89,35 @@ class PeriodeControllerTest extends TestCase
         $this->assertDatabaseMissing('periode_akademik', ['id' => $periodeBaruId]);
     }
 
-    public function test_destroy_proteksi_hapus_data_archives_periode_with_relations(): void
+    public function test_destroy_closes_and_undefaults_periode_when_dokumen_relations_exist(): void
     {
         Sanctum::actingAs($this->admin, ['admin']);
 
         $periodeDenganRelasi = PeriodeAkademik::where('nama_periode', '2026/2027 Ganjil')->firstOrFail();
+        $periodeDenganRelasi->update([
+            'status_pelaporan' => 'Buka',
+            'is_default'       => true,
+        ]);
 
         // Pastikan memiliki relasi dokumen_pelaporan
         $this->assertTrue($periodeDenganRelasi->dokumenPelaporan()->exists());
 
-        // Coba hapus periode yang sudah punya dokumen pelaporan -> harus ditolak 400 & status berubah jadi Arsip
+        // Coba hapus periode yang sudah punya dokumen pelaporan -> harus ditolak 400, status_pelaporan = 'Tutup', is_default = false
         $response = $this->deleteJson("/api/periode/{$periodeDenganRelasi->id}");
 
         $response->assertStatus(400)
             ->assertJsonPath('status', 'error')
-            ->assertJsonPath('message', 'Periode tidak dapat dihapus karena sudah memiliki data pelaporan. Status diubah menjadi Arsip.')
-            ->assertJsonPath('data.status', 'Arsip');
+            ->assertJsonPath('message', 'Periode tidak dapat dihapus karena menampung dokumen Prodi. Status diubah menjadi Tutup.')
+            ->assertJsonPath('data.status_pelaporan', 'Tutup')
+            ->assertJsonPath('data.is_default', false);
 
-        $this->assertEquals('Arsip', $periodeDenganRelasi->fresh()->status);
+        $this->assertEquals('Tutup', $periodeDenganRelasi->fresh()->status_pelaporan);
+        $this->assertFalse($periodeDenganRelasi->fresh()->is_default);
 
-        // Kembalikan ke Aktif untuk menjaga state awal database
-        $periodeDenganRelasi->update(['status' => 'Aktif']);
+        // Kembalikan ke state awal
+        $periodeDenganRelasi->update([
+            'status_pelaporan' => 'Buka',
+            'is_default'       => true,
+        ]);
     }
 }
