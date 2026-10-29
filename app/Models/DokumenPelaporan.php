@@ -17,6 +17,11 @@ class DokumenPelaporan extends Model
     public const TAHAP_NILAI     = 3;
     public const TAHAP_YUDISIUM  = 4;
 
+    public const STATUS_BELUM_UNGGAH = 'Belum Unggah';
+    public const STATUS_REVIEW       = 'Review';
+    public const STATUS_REVISI       = 'Revisi';
+    public const STATUS_SELESAI      = 'Selesai';
+
     protected $fillable = [
         'id_prodi',
         'id_periode',
@@ -27,12 +32,28 @@ class DokumenPelaporan extends Model
         'tanggal_upload',
     ];
 
+    /**
+     * Jangan pernah mengekspos path direktori asli ke response JSON.
+     */
+    protected $hidden = [
+        'file_path',
+    ];
+
+    protected $appends = [
+        'has_file',
+    ];
+
     protected function casts(): array
     {
         return [
             'tahap_dokumen'  => 'integer',
             'tanggal_upload' => 'datetime',
         ];
+    }
+
+    public function getHasFileAttribute(): bool
+    {
+        return ! empty($this->attributes['file_path']);
     }
 
     public function prodi(): BelongsTo

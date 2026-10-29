@@ -45,7 +45,7 @@ class ApiAuthAndRbacTest extends TestCase
 
         // Admin mengakses route khusus user prodi -> 403 Forbidden
         $this->withToken($token)
-            ->postJson('/api/prodi/dokumen-pelaporan/upload')
+            ->postJson('/api/dokumen/upload')
             ->assertStatus(403);
 
         // Logout menghapus current access token
@@ -73,14 +73,14 @@ class ApiAuthAndRbacTest extends TestCase
 
         $token = $loginResponse->json('data.access_token');
 
-        // User Prodi mengakses route prodi -> 200 OK
+        // User Prodi mengakses route dokumen -> 200 OK
         $this->withToken($token)
-            ->postJson('/api/prodi/dokumen-pelaporan/upload')
+            ->getJson('/api/dokumen')
             ->assertStatus(200);
 
         // User Prodi mengakses route admin -> 403 Forbidden
         $this->withToken($token)
-            ->patchJson('/api/admin/dokumen-pelaporan/1/validasi')
+            ->postJson('/api/dokumen/1/validasi')
             ->assertStatus(403);
     }
 
