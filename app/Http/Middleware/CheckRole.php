@@ -18,7 +18,21 @@ class CheckRole
     {
         $user = $request->user();
 
-        if (! $user || ! in_array($user->role, $roles, true)) {
+        if (! $user) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if (! $user->is_active) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Akun dinonaktifkan oleh Admin.',
+            ], 403);
+        }
+
+        if (! in_array($user->role, $roles, true)) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Forbidden. Anda tidak memiliki hak akses ke resource ini.',

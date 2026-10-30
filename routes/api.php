@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DokumenPelaporanController;
 use App\Http\Controllers\Api\FakultasController;
 use App\Http\Controllers\Api\PeriodeController;
+use App\Http\Controllers\Api\ProdiAccountController;
 use App\Http\Controllers\Api\ProdiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -53,13 +54,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/fakultas/{id}', [FakultasController::class, 'update'])->name('api.fakultas.update');
         Route::delete('/fakultas/{id}', [FakultasController::class, 'destroy'])->name('api.fakultas.destroy');
 
-        // Manajemen Master Data Program Studi (CRUD + Generate Akun Operator)
+        // Manajemen Master Data Program Studi
         Route::get('/prodi', [ProdiController::class, 'index'])->name('api.prodi.index');
         Route::get('/prodi/{id}', [ProdiController::class, 'show'])->name('api.prodi.show');
         Route::post('/prodi', [ProdiController::class, 'store'])->name('api.prodi.store');
         Route::put('/prodi/{id}', [ProdiController::class, 'update'])->name('api.prodi.update');
         Route::delete('/prodi/{id}', [ProdiController::class, 'destroy'])->name('api.prodi.destroy');
         Route::post('/prodi/{id}/akun', [ProdiController::class, 'createAkun'])->name('api.prodi.createAkun');
+
+        // Manajemen Kredensial / Akun Operator Prodi (Hybrid)
+        Route::get('/akun-prodi', [ProdiAccountController::class, 'index'])->name('api.akun-prodi.index');
+        Route::post('/akun-prodi', [ProdiAccountController::class, 'store'])->name('api.akun-prodi.store');
+        Route::put('/akun-prodi/{id}', [ProdiAccountController::class, 'update'])->name('api.akun-prodi.update');
+        Route::patch('/akun-prodi/{id}/toggle-status', [ProdiAccountController::class, 'toggleStatus'])->name('api.akun-prodi.toggle-status');
 
         // Validasi Dokumen Pelaporan (Khusus Admin)
         Route::post('/dokumen/{id}/validasi', [DokumenPelaporanController::class, 'validasi'])->name('api.dokumen.validasi');

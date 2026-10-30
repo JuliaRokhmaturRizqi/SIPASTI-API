@@ -84,6 +84,11 @@ class DokumenPelaporanController extends Controller
             ], 403);
         }
 
+        // Normalisasi agar mendukung field 'dokumen' maupun 'file' dari FormData frontend
+        if ($request->hasFile('dokumen') && ! $request->hasFile('file')) {
+            $request->files->set('file', $request->file('dokumen'));
+        }
+
         $validated = $request->validate([
             'id_periode'    => ['required', 'integer', 'exists:periode_akademik,id'],
             'tahap_dokumen' => ['required', 'integer', 'between:1,4'],

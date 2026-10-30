@@ -14,11 +14,14 @@ class User extends Authenticatable
 
     protected $table = 'users';
 
+    public const DEFAULT_PRODI_PASSWORD = 'Unuha2026!';
+
     protected $fillable = [
         'username',
         'password',
         'role',
         'id_prodi',
+        'is_active',
     ];
 
     protected $hidden = [
@@ -28,7 +31,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'password' => 'hashed',
+            'password'  => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 

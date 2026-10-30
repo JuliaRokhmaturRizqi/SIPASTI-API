@@ -37,7 +37,7 @@ class AuthController extends Controller
         }
 
         // Cari user via Eloquent (aman dari SQL Injection)
-        $user = User::with('prodi:id,nama_prodi')
+        $user = User::with('prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif')
             ->where('username', $credentials['username'])
             ->first();
 
@@ -52,6 +52,14 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // Cek status aktif akun (Soft Suspend Check) -> Tolak 403 jika is_active == false
+        if (! $user->is_active) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Akun dinonaktifkan oleh Admin.',
+            ], 403);
+        }
+
         // Bersihkan catatan RateLimiter jika login berhasil
         RateLimiter::clear($throttleKey);
 
@@ -63,11 +71,12 @@ class AuthController extends Controller
             'message' => 'Login berhasil.',
             'data'    => [
                 'user' => [
-                    'id'       => $user->id,
-                    'username' => $user->username,
-                    'role'     => $user->role,
-                    'id_prodi' => $user->id_prodi,
-                    'prodi'    => $user->prodi,
+                    'id'        => $user->id,
+                    'username'  => $user->username,
+                    'role'      => $user->role,
+                    'id_prodi'  => $user->id_prodi,
+                    'is_active' => $user->is_active,
+                    'prodi'     => $user->prodi,
                 ],
                 'role'         => $user->role,
                 'access_token' => $token,
