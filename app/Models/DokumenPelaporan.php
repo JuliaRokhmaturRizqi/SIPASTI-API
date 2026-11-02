@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DokumenPelaporan extends Model
 {
@@ -64,5 +65,15 @@ class DokumenPelaporan extends Model
     public function periodeAkademik(): BelongsTo
     {
         return $this->belongsTo(PeriodeAkademik::class, 'id_periode');
+    }
+
+    public function lampiran(): HasMany
+    {
+        return $this->hasMany(LampiranDokumen::class, 'dokumen_pelaporan_id');
+    }
+
+    public function lampiranDokumen(): HasMany
+    {
+        return $this->hasMany(LampiranDokumen::class, 'dokumen_pelaporan_id');
     }
 }

@@ -52,6 +52,29 @@ class ProdiAccountController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Jika id_prodi belum ada di tabel prodi tetapi nama_prodi dikirim dari daftar 14 Prodi UNUHA,
+        // buat atau temukan record Prodi secara otomatis agar tidak gagal validasi exists:prodi,id
+        if ($request->filled('nama_prodi')) {
+            $namaProdiInput = trim(strip_tags((string) $request->input('nama_prodi')));
+            $fakultasName   = trim(strip_tags((string) $request->input('fakultas_nama', 'Fakultas Universitas Nurul Huda')));
+            $fakultasCode   = trim(strip_tags((string) $request->input('fakultas_singkatan', 'UNUHA')));
+
+            $fakultasRecord = \App\Models\Fakultas::firstOrCreate(
+                ['nama_fakultas' => $fakultasName],
+                ['singkatan' => $fakultasCode]
+            );
+
+            $prodiRecord = \App\Models\Prodi::firstOrCreate(
+                ['nama_prodi' => $namaProdiInput],
+                [
+                    'id_fakultas'         => $fakultasRecord->id,
+                    'periode_mulai_aktif' => '2026/2027 Ganjil',
+                ]
+            );
+
+            $request->merge(['id_prodi' => $prodiRecord->id]);
+        }
+
         $validated = $request->validate([
             'id_prodi' => [
                 'required',
@@ -119,17 +142,26 @@ class ProdiAccountController extends Controller
                 'alpha_dash',
                 Rule::unique('users', 'username')->ignore($user->id),
             ],
-            'password' => ['nullable', 'string', 'min:6', 'max:100'],
+            'password'       => ['nullable', 'string', 'min:6', 'max:100'],
+            'reset_password' => ['nullable', 'boolean'],
         ]);
 
         try {
-            DB::transaction(function () use ($user, $validated) {
+            $isPasswordReset = false;
+
+            DB::transaction(function () use ($request, $user, $validated, &$isPasswordReset) {
                 $payload = [
                     'username' => $validated['username'],
                 ];
 
                 if (! empty($validated['password'])) {
                     $payload['password'] = bcrypt($validated['password']);
+                } elseif (
+                    $request->boolean('reset_password') ||
+                    ($request->exists('password') && $request->input('password') === '')
+                ) {
+                    $payload['password'] = bcrypt(User::DEFAULT_PRODI_PASSWORD);
+                    $isPasswordReset     = true;
                 }
 
                 $user->update($payload);
@@ -137,7 +169,9 @@ class ProdiAccountController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Akun operator program studi berhasil diperbarui.',
+                'message' => $isPasswordReset
+                    ? 'Sandi akun operator berhasil direset ke sandi default (Unuha2026!).'
+                    : 'Akun operator program studi berhasil diperbarui.',
                 'data'    => $user->fresh(['prodi.fakultas:id,singkatan,nama_fakultas']),
             ], 200);
         } catch (Throwable $e) {

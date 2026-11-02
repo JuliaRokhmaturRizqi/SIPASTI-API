@@ -36,6 +36,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dokumen', [DokumenPelaporanController::class, 'index'])->name('api.dokumen.index');
     Route::get('/dokumen/{id}/download', [DokumenPelaporanController::class, 'download'])->name('api.dokumen.download');
 
+    // Multiple Attachments (Lampiran Pendukung: Ijazah, Transkrip, dll.)
+    Route::post('/dokumen/{id}/lampiran', [DokumenPelaporanController::class, 'uploadLampiran'])->name('api.dokumen.lampiran.upload');
+    Route::delete('/dokumen/lampiran/{id_lampiran}', [DokumenPelaporanController::class, 'destroyLampiran'])->name('api.dokumen.lampiran.destroy');
+    Route::get('/dokumen/{id}/lampiran/zip', [DokumenPelaporanController::class, 'downloadLampiranZip'])->name('api.dokumen.lampiran.zip');
+
     /*
     |--------------------------------------------------------------------------
     | Admin Routes (Role: admin)

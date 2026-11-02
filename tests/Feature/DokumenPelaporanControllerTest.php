@@ -25,17 +25,39 @@ class DokumenPelaporanControllerTest extends TestCase
         Storage::fake('local');
 
         $this->admin   = User::where('username', 'admin')->firstOrFail();
-        $this->userTi  = User::where('username', 'prodi_ti')->firstOrFail();
         $this->periode = PeriodeAkademik::where('nama_periode', '2026/2027 Ganjil')->firstOrFail();
         $this->periode->update(['status_pelaporan' => 'Buka']);
+
+        $prodiTi = Prodi::firstOrCreate(['nama_prodi' => 'S1 Informatika']);
+        $this->userTi = User::updateOrCreate(
+            ['username' => 'prodi_ti'],
+            [
+                'password'  => 'password123',
+                'role'      => 'user',
+                'id_prodi'  => $prodiTi->id,
+                'is_active' => true,
+            ]
+        );
+
+        foreach ([1, 2, 3, 4] as $tahap) {
+            DokumenPelaporan::firstOrCreate(
+                [
+                    'id_prodi'      => $prodiTi->id,
+                    'id_periode'    => $this->periode->id,
+                    'tahap_dokumen' => $tahap,
+                ],
+                ['status' => 'Belum Unggah']
+            );
+        }
 
         $prodiSi = Prodi::firstOrCreate(['nama_prodi' => 'S1 Sistem Informasi']);
         $this->userSi = User::updateOrCreate(
             ['username' => 'prodi_si_test'],
             [
-                'password' => 'password123',
-                'role'     => 'user',
-                'id_prodi' => $prodiSi->id,
+                'password'  => 'password123',
+                'role'      => 'user',
+                'id_prodi'  => $prodiSi->id,
+                'is_active' => true,
             ]
         );
     }
@@ -180,5 +202,78 @@ class DokumenPelaporanControllerTest extends TestCase
 
         $allProdiIds = collect($adminRes->json('data'))->pluck('id_prodi')->unique()->values()->all();
         $this->assertGreaterThanOrEqual(2, count($allProdiIds));
+    }
+
+    public function test_multiple_attachments_upload_delete_idor_protection_and_zip_download(): void
+    {
+        $dokumen = DokumenPelaporan::where('id_prodi', $this->userTi->id_prodi)
+            ->where('id_periode', $this->periode->id)
+            ->where('tahap_dokumen', 4)
+            ->firstOrFail();
+
+        // Bersihkan lampiran lama jika ada
+        $dokumen->lampiran()->delete();
+
+        Sanctum::actingAs($this->userTi, ['user']);
+
+        // 1. Gagal jika ukuran file lampiran > 5120 KB (5MB)
+        $tooLargePdf = UploadedFile::fake()->create('ijazah_besar.pdf', 5500, 'application/pdf');
+        $this->postJson("/api/dokumen/{$dokumen->id}/lampiran", [
+            'jenis_lampiran' => 'Ijazah',
+            'file'           => $tooLargePdf,
+        ])->assertStatus(422);
+
+        // 2. Unggah asinkron lampiran ke-1 (Ijazah) & ke-2 (Transkrip)
+        $ijazahPdf = UploadedFile::fake()->create('Ijazah_Ahmad_2026.pdf', 1200, 'application/pdf');
+        $res1 = $this->postJson("/api/dokumen/{$dokumen->id}/lampiran", [
+            'jenis_lampiran' => 'Ijazah',
+            'file'           => $ijazahPdf,
+        ]);
+
+        $res1->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.jenis_lampiran', 'Ijazah')
+            ->assertJsonPath('data.nama_file_asli', 'Ijazah_Ahmad_2026.pdf')
+            ->assertJsonMissingPath('data.file_path');
+
+        $idLampiran1 = $res1->json('data.id');
+
+        $transkripPdf = UploadedFile::fake()->create('Transkrip_Ahmad_2026.pdf', 800, 'application/pdf');
+        $res2 = $this->postJson("/api/dokumen/{$dokumen->id}/lampiran", [
+            'jenis_lampiran' => 'Transkrip',
+            'file'           => $transkripPdf,
+        ]);
+        $res2->assertStatus(201);
+        $idLampiran2 = $res2->json('data.id');
+
+        // 3. Proteksi IDOR pada DELETE: Operator Prodi lain (Prodi SI) maupun Admin tidak boleh menghapus lampiran Prodi TI
+        Sanctum::actingAs($this->userSi, ['user']);
+        $this->deleteJson("/api/dokumen/lampiran/{$idLampiran1}")
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->admin, ['admin']);
+        $this->deleteJson("/api/dokumen/lampiran/{$idLampiran1}")
+            ->assertStatus(403);
+
+        // 4. Admin mengunduh seluruh lampiran sekaligus dalam format ZIP (GET /api/dokumen/{id}/lampiran/zip)
+        $zipResponse = $this->get("/api/dokumen/{$dokumen->id}/lampiran/zip");
+        $zipResponse->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/zip');
+
+        // Hapus file temp zip pada test environment karena BinaryFileResponse deleteFileAfterSend dieksekusi saat terminate
+        $tempZipPath = $zipResponse->baseResponse->getFile()->getPathname();
+        if (file_exists($tempZipPath)) {
+            @unlink($tempZipPath);
+        }
+
+        // 5. Operator Prodi TI (pemilik) menghapus lampiran ke-1 & ke-2 -> 200 OK
+        Sanctum::actingAs($this->userTi, ['user']);
+        $this->deleteJson("/api/dokumen/lampiran/{$idLampiran1}")
+            ->assertStatus(200);
+        $this->deleteJson("/api/dokumen/lampiran/{$idLampiran2}")
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('lampiran_dokumen', ['id' => $idLampiran1]);
+        $this->assertDatabaseMissing('lampiran_dokumen', ['id' => $idLampiran2]);
     }
 }
