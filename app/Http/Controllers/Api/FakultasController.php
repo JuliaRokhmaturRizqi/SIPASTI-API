@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Fakultas;
+use App\Models\Prodi;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -108,11 +111,11 @@ class FakultasController extends Controller
 
     /**
      * DELETE /api/fakultas/{id}
-     * Soft delete Fakultas.
+     * Menghapus Fakultas secara permanen dari database.
      */
     public function destroy(int $id): JsonResponse
     {
-        $fakultas = Fakultas::find($id);
+        $fakultas = Fakultas::withTrashed()->find($id);
 
         if (! $fakultas) {
             return response()->json([
@@ -121,17 +124,92 @@ class FakultasController extends Controller
             ], 404);
         }
 
+        // Cek apakah masih ada Program Studi yang terhubung dengan Fakultas ini
+        $prodiCount = Prodi::where('id_fakultas', $id)->count();
+        if ($prodiCount > 0) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => "Fakultas \"{$fakultas->nama_fakultas}\" tidak dapat dihapus karena masih menaungi {$prodiCount} Program Studi. Silakan hapus atau pindahkan Program Studi terkait terlebih dahulu.",
+            ], 422);
+        }
+
         try {
-            $fakultas->delete();
+            $fakultas->forceDelete();
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Fakultas berhasil dihapus (Soft Delete).',
+                'message' => 'Fakultas berhasil dihapus permanen dari database.',
             ], 200);
         } catch (Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Gagal menghapus fakultas.',
+                'message' => 'Gagal menghapus fakultas dari database.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/fakultas/{id}/akun
+     * Men-generate User (Operator) baru khusus untuk Fakultas tersebut.
+     * Satu akun Operator memegang beberapa Prodi di bawah Fakultasnya.
+     */
+    public function createAkun(Request $request, int $id): JsonResponse
+    {
+        $fakultas = Fakultas::with('prodi:id,id_fakultas,nama_prodi')->find($id);
+
+        if (! $fakultas) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Data fakultas tidak ditemukan.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'username' => ['required', 'string', 'min:3', 'max:50', 'alpha_dash', 'unique:users,username'],
+            'password' => ['nullable', 'string', 'min:6', 'max:100'],
+        ], [
+            'username.unique' => 'Username sudah digunakan oleh akun lain.',
+        ]);
+
+        $plainPassword = ! empty($validated['password'])
+            ? $validated['password']
+            : User::DEFAULT_OPERATOR_PASSWORD;
+
+        try {
+            $user = DB::transaction(function () use ($fakultas, $validated, $plainPassword) {
+                return User::create([
+                    'username'    => $validated['username'],
+                    'password'    => $plainPassword,
+                    'role'        => 'user',
+                    'id_fakultas' => $fakultas->id,
+                    'is_active'   => true,
+                ]);
+            });
+
+            $firstProdi = $fakultas->prodi->first();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => "Akun operator untuk fakultas {$fakultas->nama_fakultas} ({$fakultas->singkatan}) berhasil dibuat.",
+                'data'    => [
+                    'id'          => $user->id,
+                    'username'    => $user->username,
+                    'role'        => $user->role,
+                    'id_fakultas' => $user->id_fakultas,
+                    'is_active'   => $user->is_active,
+                    'fakultas'    => $fakultas,
+                    'id_prodi'    => $user->id_prodi,
+                    'prodi'       => $firstProdi ? [
+                        'id'         => $firstProdi->id,
+                        'nama_prodi' => $firstProdi->nama_prodi,
+                    ] : null,
+                ],
+            ], 201);
+        } catch (Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Terjadi kesalahan saat membuat akun operator fakultas.',
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }

@@ -50,14 +50,15 @@ class DokumenPelaporanControllerTest extends TestCase
             );
         }
 
-        $prodiSi = Prodi::firstOrCreate(['nama_prodi' => 'S1 Sistem Informasi']);
+        $prodiOther = Prodi::where('id_fakultas', '!=', $prodiTi->id_fakultas)->first()
+            ?? Prodi::where('nama_prodi', 'S1 Pendidikan Agama Islam')->firstOrFail();
         $this->userSi = User::updateOrCreate(
             ['username' => 'prodi_si_test'],
             [
-                'password'  => 'password123',
-                'role'      => 'user',
-                'id_prodi'  => $prodiSi->id,
-                'is_active' => true,
+                'password'    => 'password123',
+                'role'        => 'user',
+                'id_fakultas' => $prodiOther->id_fakultas,
+                'is_active'   => true,
             ]
         );
     }
@@ -187,13 +188,19 @@ class DokumenPelaporanControllerTest extends TestCase
             ['status' => 'Belum Unggah']
         );
 
-        // Jika diakses oleh User Prodi TI -> hanya dokumen milik Prodi TI yang muncul
+        // Jika diakses oleh User Prodi TI dengan query id_prodi -> hanya dokumen Prodi TI yang muncul
         Sanctum::actingAs($this->userTi, ['user']);
-        $userRes = $this->getJson("/api/dokumen?id_periode={$this->periode->id}");
+        $userRes = $this->getJson("/api/dokumen?id_periode={$this->periode->id}&id_prodi={$this->userTi->id_prodi}");
         $userRes->assertStatus(200);
 
         $prodiIds = collect($userRes->json('data'))->pluck('id_prodi')->unique()->values()->all();
         $this->assertEquals([$this->userTi->id_prodi], $prodiIds);
+
+        // Jika tanpa filter id_prodi, hanya menampilkan prodi dalam fakultas yang sama (tidak memuat prodi fakultas lain)
+        $userAllRes = $this->getJson("/api/dokumen?id_periode={$this->periode->id}");
+        $userAllRes->assertStatus(200);
+        $userFakultasProdiIds = collect($userAllRes->json('data'))->pluck('id_prodi')->unique()->values()->all();
+        $this->assertNotContains($this->userSi->id_prodi, $userFakultasProdiIds);
 
         // Jika diakses oleh Admin -> menampilkan dokumen dari kedua Prodi
         Sanctum::actingAs($this->admin, ['admin']);

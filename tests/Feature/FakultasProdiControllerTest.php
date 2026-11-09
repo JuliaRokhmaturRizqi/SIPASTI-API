@@ -92,7 +92,7 @@ class FakultasProdiControllerTest extends TestCase
             'password' => 'secret12345',
         ]);
         $loginRes->assertStatus(200)
-            ->assertJsonPath('data.user.id_prodi', $prodiId);
+            ->assertJsonPath('data.user.id_fakultas', $fst->id);
 
         // 4. Soft Delete Prodi
         Sanctum::actingAs($this->admin, ['admin']);

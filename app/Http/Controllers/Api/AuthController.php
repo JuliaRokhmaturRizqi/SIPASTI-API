@@ -36,8 +36,10 @@ class AuthController extends Controller
             ], 429);
         }
 
-        // Cari user via Eloquent (aman dari SQL Injection)
-        $user = User::with('prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif')
+        // Cari user via Eloquent dengan eager loading fakultas dan prodi di bawahnya
+        $user = User::with(['fakultas' => function ($query) {
+            $query->with(['prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif']);
+        }])
             ->where('username', $credentials['username'])
             ->first();
 
@@ -66,17 +68,25 @@ class AuthController extends Controller
         // Buat Sanctum Personal Access Token dengan abilities sesuai role
         $token = $user->createToken('auth_token', [$user->role])->plainTextToken;
 
+        $firstProdi = $user->fakultas?->prodi?->first();
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Login berhasil.',
             'data'    => [
                 'user' => [
-                    'id'        => $user->id,
-                    'username'  => $user->username,
-                    'role'      => $user->role,
-                    'id_prodi'  => $user->id_prodi,
-                    'is_active' => $user->is_active,
-                    'prodi'     => $user->prodi,
+                    'id'          => $user->id,
+                    'username'    => $user->username,
+                    'role'        => $user->role,
+                    'id_fakultas' => $user->id_fakultas,
+                    'is_active'   => $user->is_active,
+                    'fakultas'    => $user->fakultas,
+                    // Field kompatibilitas transisi
+                    'id_prodi'    => $user->id_prodi,
+                    'prodi'       => $firstProdi ? [
+                        'id'         => $firstProdi->id,
+                        'nama_prodi' => $firstProdi->nama_prodi,
+                    ] : null,
                 ],
                 'role'         => $user->role,
                 'access_token' => $token,

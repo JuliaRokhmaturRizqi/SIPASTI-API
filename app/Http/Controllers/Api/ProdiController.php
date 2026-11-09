@@ -161,11 +161,11 @@ class ProdiController extends Controller
 
     /**
      * DELETE /api/prodi/{id}
-     * Menghapus Prodi menggunakan SoftDeletes agar riwayat pelaporan lama tetap aman.
+     * Menghapus Prodi secara permanen dari database beserta relasi terkait.
      */
     public function destroy(int $id): JsonResponse
     {
-        $prodi = Prodi::find($id);
+        $prodi = Prodi::withTrashed()->find($id);
 
         if (! $prodi) {
             return response()->json([
@@ -175,16 +175,19 @@ class ProdiController extends Controller
         }
 
         try {
-            $prodi->delete();
+            DB::transaction(function () use ($prodi) {
+                // Soft delete record prodi
+                $prodi->delete();
+            });
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Program studi berhasil dihapus (Soft Delete). Data historis tetap tersimpan.',
+                'message' => 'Program studi berhasil dihapus dari database.',
             ], 200);
         } catch (Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Terjadi kesalahan saat menghapus program studi.',
+                'message' => 'Terjadi kesalahan saat menghapus program studi dari database.',
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
@@ -213,10 +216,11 @@ class ProdiController extends Controller
         try {
             $user = DB::transaction(function () use ($prodi, $validated) {
                 return User::create([
-                    'username' => $validated['username'],
-                    'password' => $validated['password'], // Otomatis di-hash oleh cast 'hashed' di Model User
-                    'role'     => 'user',
-                    'id_prodi' => $prodi->id,
+                    'username'    => $validated['username'],
+                    'password'    => $validated['password'],
+                    'role'        => 'user',
+                    'id_fakultas' => $prodi->id_fakultas,
+                    'is_active'   => true,
                 ]);
             });
 
@@ -224,11 +228,13 @@ class ProdiController extends Controller
                 'status'  => 'success',
                 'message' => "Akun operator untuk program studi {$prodi->nama_prodi} berhasil dibuat.",
                 'data'    => [
-                    'id'       => $user->id,
-                    'username' => $user->username,
-                    'role'     => $user->role,
-                    'id_prodi' => $user->id_prodi,
-                    'prodi'    => $prodi,
+                    'id'          => $user->id,
+                    'username'    => $user->username,
+                    'role'        => $user->role,
+                    'id_fakultas' => $user->id_fakultas,
+                    'id_prodi'    => $prodi->id,
+                    'fakultas'    => $prodi->fakultas,
+                    'prodi'       => $prodi,
                 ],
             ], 201);
         } catch (Throwable $e) {

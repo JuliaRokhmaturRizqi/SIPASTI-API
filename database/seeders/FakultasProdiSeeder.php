@@ -63,23 +63,23 @@ class FakultasProdiSeeder extends Seeder
             ];
 
             foreach ($masterData as $fakData) {
-                $fakultas = Fakultas::withTrashed()->updateOrCreate(
-                    ['singkatan' => $fakData['singkatan']],
-                    [
-                        'nama_fakultas' => $fakData['nama_fakultas'],
-                        'deleted_at'    => null,
-                    ]
-                );
+                $fakultas = Fakultas::withTrashed()->firstOrNew(['singkatan' => $fakData['singkatan']]);
+                $fakultas->nama_fakultas = $fakData['nama_fakultas'];
+                if ($fakultas->trashed()) {
+                    $fakultas->restore();
+                } else {
+                    $fakultas->save();
+                }
 
                 foreach ($fakData['prodi'] as $prodiData) {
-                    Prodi::withTrashed()->updateOrCreate(
-                        ['nama_prodi' => $prodiData['nama_prodi']],
-                        [
-                            'id_fakultas'         => $fakultas->id,
-                            'periode_mulai_aktif' => $prodiData['periode_mulai_aktif'],
-                            'deleted_at'          => null,
-                        ]
-                    );
+                    $prodi = Prodi::withTrashed()->firstOrNew(['nama_prodi' => $prodiData['nama_prodi']]);
+                    $prodi->id_fakultas         = $fakultas->id;
+                    $prodi->periode_mulai_aktif = $prodiData['periode_mulai_aktif'];
+                    if ($prodi->trashed()) {
+                        $prodi->restore();
+                    } else {
+                        $prodi->save();
+                    }
                 }
             }
         });

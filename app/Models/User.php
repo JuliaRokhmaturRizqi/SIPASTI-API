@@ -14,20 +14,64 @@ class User extends Authenticatable
 
     protected $table = 'users';
 
-    public const DEFAULT_PRODI_PASSWORD = 'Unuha2026!';
+    public const DEFAULT_OPERATOR_PASSWORD = 'Unuha2026!';
+    public const DEFAULT_PRODI_PASSWORD    = 'Unuha2026!';
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'username',
         'password',
         'role',
-        'id_prodi',
+        'id_fakultas',
         'is_active',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
     protected $hidden = [
         'password',
     ];
 
+    /**
+     * Appends accessor attributes for serialization compatibility.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'id_prodi',
+    ];
+
+    /**
+     * Default attribute values.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'password'  => 'hashed',
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Get the attributes that should be cast (Laravel 11+).
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
@@ -36,9 +80,34 @@ class User extends Authenticatable
         ];
     }
 
-    public function prodi(): BelongsTo
+    /**
+     * Relasi ke Fakultas (1 Akun Operator bertugas untuk 1 Fakultas).
+     */
+    public function fakultas(): BelongsTo
     {
-        return $this->belongsTo(Prodi::class, 'id_prodi');
+        return $this->belongsTo(Fakultas::class, 'id_fakultas');
+    }
+
+    /**
+     * Mutator kompatibilitas transisi: jika kode sebelumnya mengirimkan 'id_prodi',
+     * otomatis petakan ke id_fakultas milik prodi tersebut.
+     */
+    public function setIdProdiAttribute($value): void
+    {
+        if ($value) {
+            $prodi = Prodi::find($value);
+            if ($prodi && $prodi->id_fakultas) {
+                $this->attributes['id_fakultas'] = $prodi->id_fakultas;
+            }
+        }
+    }
+
+    /**
+     * Accessor dinamis untuk menjaga backwards compatibility selama transisi refactoring.
+     */
+    public function getIdProdiAttribute(): ?int
+    {
+        return $this->fakultas?->prodi()->value('id');
     }
 
     public function isAdmin(): bool

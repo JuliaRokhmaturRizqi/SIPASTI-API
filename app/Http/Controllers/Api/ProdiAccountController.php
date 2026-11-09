@@ -14,19 +14,22 @@ class ProdiAccountController extends Controller
 {
     /**
      * GET /api/akun-prodi
-     * Mengambil daftar seluruh akun Operator Prodi (role = 'user') beserta relasi data Prodi dan Fakultasnya.
+     * Mengambil daftar seluruh akun Operator (role = 'user') beserta relasi data Fakultas dan Prodinya.
      */
     public function index(): JsonResponse
     {
         try {
             $accounts = User::query()
-                ->with(['prodi' => function ($query) {
-                    $query->with('fakultas:id,singkatan,nama_fakultas');
-                }])
+                ->with(['fakultas.prodi:id,id_fakultas,nama_prodi'])
                 ->where('role', 'user')
-                ->orderBy('id_prodi')
                 ->orderBy('id')
-                ->get();
+                ->get()
+                ->map(function ($u) {
+                    $firstProdi = $u->fakultas?->prodi?->first();
+                    $u->setAttribute('id_prodi', $firstProdi?->id);
+                    $u->setRelation('prodi', $firstProdi);
+                    return $u;
+                });
 
             return response()->json([
                 'status'  => 'success',
@@ -75,39 +78,59 @@ class ProdiAccountController extends Controller
             $request->merge(['id_prodi' => $prodiRecord->id]);
         }
 
+        $prodi = \App\Models\Prodi::with('fakultas:id,singkatan,nama_fakultas')->find($request->input('id_prodi'));
+
         $validated = $request->validate([
             'id_prodi' => [
                 'required',
                 'integer',
                 Rule::exists('prodi', 'id')->whereNull('deleted_at'),
-                Rule::unique('users', 'id_prodi'),
             ],
             'username' => ['required', 'string', 'min:3', 'max:50', 'alpha_dash', 'unique:users,username'],
             'password' => ['nullable', 'string', 'min:6', 'max:100'],
         ], [
-            'id_prodi.unique' => 'Program studi ini sudah memiliki akun operator.',
             'username.unique' => 'Username sudah digunakan oleh akun lain.',
         ]);
+
+        if ($prodi && User::where('id_fakultas', $prodi->id_fakultas)->exists()) {
+            return response()->json([
+                'message' => 'Program studi ini sudah memiliki akun operator.',
+                'errors'  => [
+                    'id_prodi' => ['Program studi ini sudah memiliki akun operator.'],
+                ],
+            ], 422);
+        }
 
         $plainPassword = ! empty($validated['password'])
             ? $validated['password']
             : User::DEFAULT_PRODI_PASSWORD;
 
         try {
-            $user = DB::transaction(function () use ($validated, $plainPassword) {
+            $user = DB::transaction(function () use ($validated, $plainPassword, $prodi) {
                 return User::create([
-                    'id_prodi'  => $validated['id_prodi'],
-                    'username'  => $validated['username'],
-                    'password'  => bcrypt($plainPassword),
-                    'role'      => 'user',
-                    'is_active' => true,
+                    'id_fakultas' => $prodi?->id_fakultas,
+                    'username'    => $validated['username'],
+                    'password'    => $plainPassword,
+                    'role'        => 'user',
+                    'is_active'   => true,
                 ]);
             });
 
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Akun operator program studi berhasil dibuat.',
-                'data'    => $user->load('prodi.fakultas:id,singkatan,nama_fakultas'),
+                'data'    => [
+                    'id'        => $user->id,
+                    'username'  => $user->username,
+                    'role'      => $user->role,
+                    'is_active' => $user->is_active,
+                    'id_prodi'  => $prodi?->id,
+                    'prodi'     => $prodi ? [
+                        'id'         => $prodi->id,
+                        'nama_prodi' => $prodi->nama_prodi,
+                        'fakultas'   => $prodi->fakultas,
+                    ] : null,
+                ],
             ], 201);
         } catch (Throwable $e) {
             return response()->json([
@@ -167,12 +190,21 @@ class ProdiAccountController extends Controller
                 $user->update($payload);
             });
 
+            $refreshed = $user->fresh(['fakultas.prodi:id,id_fakultas,nama_prodi']);
+            $firstProdi = $refreshed->fakultas?->prodi?->first();
+            $refreshed->id_prodi = $firstProdi?->id;
+            $refreshed->prodi = $firstProdi ? (object) [
+                'id'         => $firstProdi->id,
+                'nama_prodi' => $firstProdi->nama_prodi,
+                'fakultas'   => $refreshed->fakultas,
+            ] : null;
+
             return response()->json([
                 'status'  => 'success',
                 'message' => $isPasswordReset
                     ? 'Sandi akun operator berhasil direset ke sandi default (Unuha2026!).'
                     : 'Akun operator program studi berhasil diperbarui.',
-                'data'    => $user->fresh(['prodi.fakultas:id,singkatan,nama_fakultas']),
+                'data'    => $refreshed,
             ], 200);
         } catch (Throwable $e) {
             return response()->json([
@@ -212,7 +244,16 @@ class ProdiAccountController extends Controller
                     $user->tokens()->delete();
                 }
 
-                return $user->fresh(['prodi.fakultas:id,singkatan,nama_fakultas']);
+                $refreshed = $user->fresh(['fakultas.prodi:id,id_fakultas,nama_prodi']);
+                $firstProdi = $refreshed->fakultas?->prodi?->first();
+                $refreshed->id_prodi = $firstProdi?->id;
+                $refreshed->prodi = $firstProdi ? (object) [
+                    'id'         => $firstProdi->id,
+                    'nama_prodi' => $firstProdi->nama_prodi,
+                    'fakultas'   => $refreshed->fakultas,
+                ] : null;
+
+                return $refreshed;
             });
 
             $statusText = $updatedUser->is_active ? 'diaktifkan' : 'dinonaktifkan';
@@ -226,6 +267,42 @@ class ProdiAccountController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Terjadi kesalahan saat mengubah status akun operator program studi.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * DELETE /api/akun-prodi/{id}
+     * Menghapus akun Operator Prodi.
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $user = User::where('role', 'user')->find($id);
+
+        if (! $user) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Data akun operator program studi tidak ditemukan.',
+            ], 404);
+        }
+
+        try {
+            DB::transaction(function () use ($user) {
+                // Cabut semua token sesi Sanctum
+                $user->tokens()->delete();
+                // Hapus akun dari database
+                $user->delete();
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => "Akun operator \"{$user->username}\" berhasil dihapus dari database.",
+            ], 200);
+        } catch (Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Gagal menghapus akun operator program studi.',
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }

@@ -23,8 +23,8 @@ class ProdiAccountControllerTest extends TestCase
 
         $prodiPai = Prodi::where('nama_prodi', 'S1 Pendidikan Agama Islam')->firstOrFail();
 
-        // Bersihkan jika ada akun sebelumnya pada prodi ini
-        User::where('id_prodi', $prodiPai->id)->delete();
+        // Bersihkan jika ada akun sebelumnya pada fakultas prodi ini
+        User::where('id_fakultas', $prodiPai->id_fakultas)->delete();
         User::where('username', 'op_pai_unuha')->delete();
 
         // 1. Buat akun dengan password kosong/null -> harus otomatis memakai default 'Unuha2026!'

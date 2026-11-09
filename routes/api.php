@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DokumenPelaporanController;
+use App\Http\Controllers\Api\FakultasAccountController;
 use App\Http\Controllers\Api\FakultasController;
 use App\Http\Controllers\Api\PeriodeController;
 use App\Http\Controllers\Api\ProdiAccountController;
@@ -28,7 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', function (Request $request) {
         return response()->json([
             'status' => 'success',
-            'data'   => $request->user()->load('prodi.fakultas:id,singkatan,nama_fakultas'),
+            'data'   => $request->user()->load(['fakultas.prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif']),
         ]);
     });
 
@@ -41,6 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/dokumen/lampiran/{id_lampiran}', [DokumenPelaporanController::class, 'destroyLampiran'])->name('api.dokumen.lampiran.destroy');
     Route::get('/dokumen/{id}/lampiran/zip', [DokumenPelaporanController::class, 'downloadLampiranZip'])->name('api.dokumen.lampiran.zip');
 
+    // Daftar Periode Akademik (Dapat dibaca oleh Admin maupun Operator Prodi)
+    Route::get('/periode', [PeriodeController::class, 'index'])->name('api.periode.index');
+
     /*
     |--------------------------------------------------------------------------
     | Admin Routes (Role: admin)
@@ -48,9 +52,10 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::middleware('role:admin')->group(function () {
         // Manajemen Periode Akademik
-        Route::get('/periode', [PeriodeController::class, 'index'])->name('api.periode.index');
         Route::post('/periode', [PeriodeController::class, 'store'])->name('api.periode.store');
         Route::put('/periode/{id}', [PeriodeController::class, 'update'])->name('api.periode.update');
+        Route::patch('/periode/{id}/toggle-active', [PeriodeController::class, 'toggleActive'])->name('api.periode.toggle-active');
+        Route::patch('/periode/{id}/toggle-status', [PeriodeController::class, 'toggleActive'])->name('api.periode.toggle-status');
         Route::delete('/periode/{id}', [PeriodeController::class, 'destroy'])->name('api.periode.destroy');
 
         // Manajemen Master Data Fakultas
@@ -58,6 +63,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/fakultas', [FakultasController::class, 'store'])->name('api.fakultas.store');
         Route::put('/fakultas/{id}', [FakultasController::class, 'update'])->name('api.fakultas.update');
         Route::delete('/fakultas/{id}', [FakultasController::class, 'destroy'])->name('api.fakultas.destroy');
+        Route::post('/fakultas/{id}/akun', [FakultasController::class, 'createAkun'])->name('api.fakultas.createAkun');
+
+        // Manajemen Akun Operator Fakultas (Berbasis Fakultas)
+        Route::get('/akun-fakultas', [FakultasAccountController::class, 'index'])->name('api.akun-fakultas.index');
+        Route::post('/akun-fakultas', [FakultasAccountController::class, 'store'])->name('api.akun-fakultas.store');
+        Route::put('/akun-fakultas/{id}', [FakultasAccountController::class, 'update'])->name('api.akun-fakultas.update');
+        Route::patch('/akun-fakultas/{id}/toggle-status', [FakultasAccountController::class, 'toggleStatus'])->name('api.akun-fakultas.toggle-status');
+        Route::delete('/akun-fakultas/{id}', [FakultasAccountController::class, 'destroy'])->name('api.akun-fakultas.destroy');
 
         // Manajemen Master Data Program Studi
         Route::get('/prodi', [ProdiController::class, 'index'])->name('api.prodi.index');
@@ -72,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/akun-prodi', [ProdiAccountController::class, 'store'])->name('api.akun-prodi.store');
         Route::put('/akun-prodi/{id}', [ProdiAccountController::class, 'update'])->name('api.akun-prodi.update');
         Route::patch('/akun-prodi/{id}/toggle-status', [ProdiAccountController::class, 'toggleStatus'])->name('api.akun-prodi.toggle-status');
+        Route::delete('/akun-prodi/{id}', [ProdiAccountController::class, 'destroy'])->name('api.akun-prodi.destroy');
 
         // Validasi Dokumen Pelaporan (Khusus Admin)
         Route::post('/dokumen/{id}/validasi', [DokumenPelaporanController::class, 'validasi'])->name('api.dokumen.validasi');

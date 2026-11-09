@@ -3,10 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\DokumenPelaporan;
+use App\Models\LampiranDokumen;
 use App\Models\PeriodeAkademik;
 use App\Models\Prodi;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -15,32 +19,21 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $prodiTi  = Prodi::firstOrCreate(['nama_prodi' => 'S1 Teknik Informatika']);
-        $prodiSi  = Prodi::firstOrCreate(['nama_prodi' => 'S1 Sistem Informasi']);
-        $prodiMat = Prodi::firstOrCreate(['nama_prodi' => 'S1 Pendidikan Matematika']);
-        $prodiMp  = Prodi::firstOrCreate(['nama_prodi' => 'S1 Manajemen Pendidikan']);
+        // 1. Jalankan Master Data Fakultas & Prodi UNUHA
+        $this->call(FakultasProdiSeeder::class);
 
-        // Akun Admin Universitas (id_prodi = null)
+        // 2. Akun Admin Universitas
         User::updateOrCreate(
             ['username' => 'admin'],
             [
-                'password' => 'password123',
-                'role'     => 'admin',
-                'id_prodi' => null,
+                'password'    => 'password123',
+                'role'        => 'admin',
+                'id_fakultas' => null,
+                'is_active'   => true,
             ]
         );
 
-        // Akun Operator Prodi Teknik Informatika
-        User::updateOrCreate(
-            ['username' => 'prodi_ti'],
-            [
-                'password' => 'password123',
-                'role'     => 'user',
-                'id_prodi' => $prodiTi->id,
-            ]
-        );
-
-        // Periode Akademik Aktif (Multi-Open + Default Period)
+        // 3. Periode Akademik Berjalan (Default & Buka)
         $periode = PeriodeAkademik::updateOrCreate(
             ['nama_periode' => '2026/2027 Ganjil'],
             [
@@ -49,76 +42,68 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Inisialisasi 4 Tahap Dokumen Pelaporan untuk Prodi TI
-        $tahapanAwal = [
-            1 => [
-                'status'         => 'Selesai',
-                'file_path'      => 'dokumen-pelaporan/kurikulum-ti-2026-ganjil.pdf',
-                'catatan_revisi' => null,
-                'tanggal_upload' => now()->subDays(5),
-            ],
-            2 => [
-                'status'         => 'Selesai',
-                'file_path'      => 'dokumen-pelaporan/kelas-jadwal-ti-2026-ganjil.pdf',
-                'catatan_revisi' => null,
-                'tanggal_upload' => now()->subDays(3),
-            ],
-            3 => [
-                'status'         => 'Revisi',
-                'file_path'      => 'dokumen-pelaporan/nilai-perkuliahan-ti-2026-ganjil.pdf',
-                'catatan_revisi' => 'Rekapitulasi nilai mata kuliah wajib semester 3 dan 5 belum mencantumkan pengesahan Kaprodi serta lampiran berita acara nilai belum lengkap. Mohon perbaiki dan unggah ulang dalam format PDF.',
-                'tanggal_upload' => now()->subDay(),
-            ],
-            4 => [
-                'status'         => 'Belum Unggah',
-                'file_path'      => null,
-                'catatan_revisi' => null,
-                'tanggal_upload' => null,
-            ],
-        ];
+        // 4. Pastikan Akun Operator Prodi TI (Informatika - Fakultas Sains dan Teknologi) tersedia untuk testing/login
+        $prodiInformatika = Prodi::with('fakultas')->where('nama_prodi', 'S1 Informatika')->first()
+            ?? Prodi::with('fakultas')->first();
 
-        foreach ($tahapanAwal as $tahap => $detail) {
-            DokumenPelaporan::updateOrCreate(
+        if ($prodiInformatika) {
+            User::updateOrCreate(
+                ['username' => 'prodi_ti'],
                 [
-                    'id_prodi'      => $prodiTi->id,
-                    'id_periode'    => $periode->id,
-                    'tahap_dokumen' => $tahap,
-                ],
-                $detail
+                    'password'    => 'password123',
+                    'role'        => 'user',
+                    'id_fakultas' => $prodiInformatika->id_fakultas,
+                    'is_active'   => true,
+                ]
             );
         }
 
-        // Data Matriks Pemantauan untuk Prodi lainnya agar Admin dapat langsung menguji Review/Validasi
-        $matriksTambahan = [
-            $prodiSi->id => [
-                1 => ['status' => 'Selesai', 'file_path' => 'dokumen-pelaporan/kurikulum-si-2026.pdf', 'catatan_revisi' => null, 'tanggal_upload' => now()->subDays(6)],
-                2 => ['status' => 'Review',  'file_path' => 'dokumen-pelaporan/jadwal-si-2026.pdf',    'catatan_revisi' => null, 'tanggal_upload' => now()->subHours(5)],
-                3 => ['status' => 'Review',  'file_path' => 'dokumen-pelaporan/nilai-si-2026.pdf',     'catatan_revisi' => null, 'tanggal_upload' => now()->subHours(2)],
-                4 => ['status' => 'Belum Unggah', 'file_path' => null, 'catatan_revisi' => null, 'tanggal_upload' => null],
-            ],
-            $prodiMat->id => [
-                1 => ['status' => 'Selesai', 'file_path' => 'dokumen-pelaporan/kurikulum-mat-2026.pdf', 'catatan_revisi' => null, 'tanggal_upload' => now()->subDays(7)],
-                2 => ['status' => 'Selesai', 'file_path' => 'dokumen-pelaporan/jadwal-mat-2026.pdf',    'catatan_revisi' => null, 'tanggal_upload' => now()->subDays(4)],
-                3 => ['status' => 'Selesai', 'file_path' => 'dokumen-pelaporan/nilai-mat-2026.pdf',     'catatan_revisi' => null, 'tanggal_upload' => now()->subDays(2)],
-                4 => ['status' => 'Review',  'file_path' => 'dokumen-pelaporan/yudisium-mat-2026.pdf',  'catatan_revisi' => null, 'tanggal_upload' => now()->subHour()],
-            ],
-            $prodiMp->id => [
-                1 => ['status' => 'Review',  'file_path' => 'dokumen-pelaporan/kurikulum-mp-2026.pdf', 'catatan_revisi' => null, 'tanggal_upload' => now()->subHours(8)],
-                2 => ['status' => 'Revisi',  'file_path' => 'dokumen-pelaporan/jadwal-mp-2026.pdf',    'catatan_revisi' => 'Distribusi SKS dosen tetap pada jadwal semester ganjil belum sesuai SK Dekan.', 'tanggal_upload' => now()->subDays(1)],
-                3 => ['status' => 'Belum Unggah', 'file_path' => null, 'catatan_revisi' => null, 'tanggal_upload' => null],
-                4 => ['status' => 'Belum Unggah', 'file_path' => null, 'catatan_revisi' => null, 'tanggal_upload' => null],
-            ],
-        ];
+        // 5. Buatkan akun operator default untuk seluruh Fakultas UNUHA
+        $allFakultas = \App\Models\Fakultas::all();
+        foreach ($allFakultas as $fakultas) {
+            $existingUser = User::where('id_fakultas', $fakultas->id)->first();
+            if (! $existingUser) {
+                $cleanSlug = Str::slug($fakultas->singkatan ?: $fakultas->nama_fakultas, '_');
+                $username  = 'op_' . Str::lower($cleanSlug);
 
-        foreach ($matriksTambahan as $idProdi => $tahapList) {
-            foreach ($tahapList as $tahap => $detail) {
+                User::updateOrCreate(
+                    ['username' => $username],
+                    [
+                        'password'    => 'Unuha2026!',
+                        'role'        => 'user',
+                        'id_fakultas' => $fakultas->id,
+                        'is_active'   => true,
+                    ]
+                );
+            }
+        }
+
+        // 6. Bersihkan data dummy lampiran dan file fisik di storage
+        LampiranDokumen::truncate();
+        if (Storage::disk('local')->exists('dokumen_pelaporan')) {
+            Storage::disk('local')->deleteDirectory('dokumen_pelaporan');
+        }
+        if (File::isDirectory(storage_path('app/temp_zip'))) {
+            File::deleteDirectory(storage_path('app/temp_zip'));
+        }
+
+        // 7. Inisialisasi 4 Tahap Dokumen Pelaporan untuk SEMUA Program Studi (Semua 'Belum Unggah')
+        // Tahap: 1: Kurikulum, 2: Jadwal, 3: Nilai, 4: Yudisium
+        $allProdis = Prodi::all();
+        foreach ($allProdis as $prodi) {
+            foreach ([1, 2, 3, 4] as $tahap) {
                 DokumenPelaporan::updateOrCreate(
                     [
-                        'id_prodi'      => $idProdi,
+                        'id_prodi'      => $prodi->id,
                         'id_periode'    => $periode->id,
                         'tahap_dokumen' => $tahap,
                     ],
-                    $detail
+                    [
+                        'status'         => DokumenPelaporan::STATUS_BELUM_UNGGAH,
+                        'file_path'      => null,
+                        'catatan_revisi' => null,
+                        'tanggal_upload' => null,
+                    ]
                 );
             }
         }

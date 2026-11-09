@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\DokumenPelaporan;
 use App\Models\LampiranDokumen;
 use App\Models\PeriodeAkademik;
+use App\Models\Prodi;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +46,21 @@ class DokumenPelaporanController extends Controller
 
             // Filter otomatis berdasarkan role (mencegah IDOR)
             if ($user->role === 'user') {
-                $query->where('id_prodi', $user->id_prodi);
+                if ($user->id_fakultas) {
+                    $prodiIds = Prodi::where('id_fakultas', $user->id_fakultas)->pluck('id')->toArray();
+                    if ($request->filled('id_prodi')) {
+                        $targetProdi = (int) $request->input('id_prodi');
+                        if (in_array($targetProdi, $prodiIds, true)) {
+                            $query->where('id_prodi', $targetProdi);
+                        } else {
+                            $query->whereRaw('1 = 0');
+                        }
+                    } else {
+                        $query->whereIn('id_prodi', $prodiIds);
+                    }
+                } elseif ($user->id_prodi) {
+                    $query->where('id_prodi', $user->id_prodi);
+                }
             }
 
             // Filter berdasarkan query parameter ?id_periode=
@@ -82,17 +98,21 @@ class DokumenPelaporanController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $user = $request->user();
+        $idProdi = (int) ($request->input('id_prodi') ?: $user->id_prodi);
 
-        if (! $user->id_prodi) {
+        if (! $idProdi || ! $this->canUserAccessProdi($user, $idProdi)) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Akun Anda tidak terhubung dengan Program Studi manapun.',
+                'message' => 'Akun Operator Anda tidak memiliki hak akses untuk mengunggah dokumen pada Program Studi ini.',
             ], 403);
         }
 
-        // Normalisasi agar mendukung field 'dokumen' maupun 'file' dari FormData frontend
-        if ($request->hasFile('dokumen') && ! $request->hasFile('file')) {
-            $request->files->set('file', $request->file('dokumen'));
+        // Normalisasi agar mendukung field 'file' maupun 'dokumen' serta 'tahap_dokumen' maupun 'tahap'
+        if ($request->files->has('dokumen') && ! $request->files->has('file')) {
+            $request->files->set('file', $request->files->get('dokumen'));
+        }
+        if (! $request->filled('tahap_dokumen') && $request->filled('tahap')) {
+            $request->merge(['tahap_dokumen' => $request->input('tahap')]);
         }
 
         $validated = $request->validate([
@@ -102,15 +122,14 @@ class DokumenPelaporanController extends Controller
         ]);
 
         $idPeriode    = (int) $validated['id_periode'];
-        $idProdi      = (int) $user->id_prodi;
         $tahapDokumen = (int) $validated['tahap_dokumen'];
 
-        // Cek apakah periode akademik berstatus 'Buka'
+        // Cek apakah periode akademik berstatus aktif / dibuka
         $periode = PeriodeAkademik::findOrFail($idPeriode);
-        if ($periode->status_pelaporan !== PeriodeAkademik::STATUS_BUKA) {
+        if (! $periode->status_aktif || $periode->status_pelaporan !== PeriodeAkademik::STATUS_BUKA) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Periode akademik ini sedang ditutup untuk pelaporan dokumen.',
+                'message' => 'Periode akademik ini sedang dinonaktifkan / ditutup untuk pelaporan dokumen.',
             ], 403);
         }
 
@@ -249,8 +268,8 @@ class DokumenPelaporanController extends Controller
 
         $user = $request->user();
 
-        // Proteksi RBAC & Anti-IDOR
-        if ($user->role === 'user' && (int) $dokumen->id_prodi !== (int) $user->id_prodi) {
+        // Proteksi RBAC & Anti-IDOR (Mendukung Arsitektur Akun Operator Berbasis Fakultas)
+        if ($user->role === 'user' && ! $this->canUserAccessProdi($user, (int) $dokumen->id_prodi)) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Forbidden. Anda tidak memiliki hak akses untuk mengunduh dokumen prodi lain.',
@@ -306,17 +325,17 @@ class DokumenPelaporanController extends Controller
 
         $user = $request->user();
 
-        // Hanya Operator Prodi pemilik dokumen yang diizinkan mengunggah lampiran
-        if ($user->role !== 'user' || (int) $dokumen->id_prodi !== (int) $user->id_prodi) {
+        // Hanya Operator yang menaungi Prodi pemilik dokumen yang diizinkan mengunggah lampiran
+        if ($user->role !== 'user' || ! $this->canUserAccessProdi($user, (int) $dokumen->id_prodi)) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Forbidden. Hanya Operator Prodi pemilik dokumen yang dapat mengunggah lampiran.',
             ], 403);
         }
 
-        // Normalisasi agar mendukung field 'lampiran' maupun 'file' dari FormData frontend
-        if ($request->hasFile('lampiran') && ! $request->hasFile('file')) {
-            $request->files->set('file', $request->file('lampiran'));
+        // Normalisasi agar mendukung field 'file' maupun 'lampiran' dari FormData frontend
+        if ($request->files->has('lampiran') && ! $request->files->has('file')) {
+            $request->files->set('file', $request->files->get('lampiran'));
         }
 
         $validated = $request->validate([
@@ -385,8 +404,8 @@ class DokumenPelaporanController extends Controller
         $user    = $request->user();
         $dokumen = $lampiran->dokumenPelaporan;
 
-        // Validasi ketat: Hanya Operator Prodi pemilik dokumen yang berhak menghapus
-        if ($user->role !== 'user' || (int) $dokumen->id_prodi !== (int) $user->id_prodi) {
+        // Validasi ketat: Hanya Operator yang menaungi Prodi pemilik dokumen yang berhak menghapus
+        if ($user->role !== 'user' || ! $this->canUserAccessProdi($user, (int) $dokumen->id_prodi)) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Forbidden. Hanya Operator Prodi pemilik dokumen yang dapat menghapus lampiran ini.',
@@ -436,8 +455,8 @@ class DokumenPelaporanController extends Controller
 
         $user = $request->user();
 
-        // Otorisasi: Admin diizinkan semua; User hanya boleh mengunduh milik prodinya sendiri
-        if ($user->role === 'user' && (int) $dokumen->id_prodi !== (int) $user->id_prodi) {
+        // Otorisasi: Admin diizinkan semua; User hanya boleh mengunduh milik prodinya sendiri (Mendukung Akun Fakultas)
+        if ($user->role === 'user' && ! $this->canUserAccessProdi($user, (int) $dokumen->id_prodi)) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Forbidden. Anda tidak memiliki hak akses untuk mengunduh lampiran prodi lain.',
@@ -531,5 +550,33 @@ class DokumenPelaporanController extends Controller
             'Content-Type'           => 'application/zip',
             'X-Content-Type-Options' => 'nosniff',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Memeriksa otorisasi apakah User (Operator) berhak mengakses dokumen suatu Prodi.
+     */
+    private function canUserAccessProdi(User $user, int $idProdi): bool
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        if ($user->role !== 'user') {
+            return false;
+        }
+
+        // Cek jika akun berbasis Fakultas (arsitektur baru)
+        if ($user->id_fakultas) {
+            return Prodi::where('id', $idProdi)
+                ->where('id_fakultas', $user->id_fakultas)
+                ->exists();
+        }
+
+        // Cek jika akun masih memiliki id_prodi (kompatibilitas transisi)
+        if ($user->id_prodi) {
+            return (int) $idProdi === (int) $user->id_prodi;
+        }
+
+        return false;
     }
 }
