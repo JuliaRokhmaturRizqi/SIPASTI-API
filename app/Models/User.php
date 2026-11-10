@@ -27,6 +27,8 @@ class User extends Authenticatable
         'password',
         'role',
         'id_fakultas',
+        'id_unit_kerja',
+        'id_prodi',
         'is_active',
     ];
 
@@ -86,6 +88,14 @@ class User extends Authenticatable
     public function fakultas(): BelongsTo
     {
         return $this->belongsTo(Fakultas::class, 'id_fakultas');
+    }
+
+    /**
+     * Relasi ke Unit Kerja (untuk akun Biro, Pusat, atau Laboratorium).
+     */
+    public function unitKerja(): BelongsTo
+    {
+        return $this->belongsTo(UnitKerja::class, 'id_unit_kerja');
     }
 
     /**

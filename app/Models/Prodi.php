@@ -27,7 +27,7 @@ class Prodi extends Model
 
     public function users(): HasMany
     {
-        return $this->hasMany(User::class, 'id_prodi');
+        return $this->hasMany(User::class, 'id_fakultas', 'id_fakultas');
     }
 
     public function dokumenPelaporan(): HasMany

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DokumenPelaporanController;
 use App\Http\Controllers\Api\FakultasAccountController;
 use App\Http\Controllers\Api\FakultasController;
+use App\Http\Controllers\Api\LaporanKinerjaController;
 use App\Http\Controllers\Api\PeriodeController;
 use App\Http\Controllers\Api\ProdiAccountController;
 use App\Http\Controllers\Api\ProdiController;
@@ -42,8 +43,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/dokumen/lampiran/{id_lampiran}', [DokumenPelaporanController::class, 'destroyLampiran'])->name('api.dokumen.lampiran.destroy');
     Route::get('/dokumen/{id}/lampiran/zip', [DokumenPelaporanController::class, 'downloadLampiranZip'])->name('api.dokumen.lampiran.zip');
 
-    // Daftar Periode Akademik (Dapat dibaca oleh Admin maupun Operator Prodi)
+    // Daftar Periode Akademik, Fakultas, dan Program Studi (Dapat dibaca oleh Admin maupun Operator Fakultas)
     Route::get('/periode', [PeriodeController::class, 'index'])->name('api.periode.index');
+    Route::get('/fakultas', [FakultasController::class, 'index'])->name('api.fakultas.index');
+    Route::get('/prodi', [ProdiController::class, 'index'])->name('api.prodi.index');
+    Route::get('/prodi/{id}', [ProdiController::class, 'show'])->name('api.prodi.show');
 
     /*
     |--------------------------------------------------------------------------
@@ -59,13 +63,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/periode/{id}', [PeriodeController::class, 'destroy'])->name('api.periode.destroy');
 
         // Manajemen Master Data Fakultas
-        Route::get('/fakultas', [FakultasController::class, 'index'])->name('api.fakultas.index');
         Route::post('/fakultas', [FakultasController::class, 'store'])->name('api.fakultas.store');
         Route::put('/fakultas/{id}', [FakultasController::class, 'update'])->name('api.fakultas.update');
         Route::delete('/fakultas/{id}', [FakultasController::class, 'destroy'])->name('api.fakultas.destroy');
         Route::post('/fakultas/{id}/akun', [FakultasController::class, 'createAkun'])->name('api.fakultas.createAkun');
 
         // Manajemen Akun Operator Fakultas (Berbasis Fakultas)
+        Route::get('/fakultas/akun', [FakultasAccountController::class, 'index'])->name('api.fakultas.akun');
         Route::get('/akun-fakultas', [FakultasAccountController::class, 'index'])->name('api.akun-fakultas.index');
         Route::post('/akun-fakultas', [FakultasAccountController::class, 'store'])->name('api.akun-fakultas.store');
         Route::put('/akun-fakultas/{id}', [FakultasAccountController::class, 'update'])->name('api.akun-fakultas.update');
@@ -73,8 +77,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/akun-fakultas/{id}', [FakultasAccountController::class, 'destroy'])->name('api.akun-fakultas.destroy');
 
         // Manajemen Master Data Program Studi
-        Route::get('/prodi', [ProdiController::class, 'index'])->name('api.prodi.index');
-        Route::get('/prodi/{id}', [ProdiController::class, 'show'])->name('api.prodi.show');
         Route::post('/prodi', [ProdiController::class, 'store'])->name('api.prodi.store');
         Route::put('/prodi/{id}', [ProdiController::class, 'update'])->name('api.prodi.update');
         Route::delete('/prodi/{id}', [ProdiController::class, 'destroy'])->name('api.prodi.destroy');
@@ -89,6 +91,23 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Validasi Dokumen Pelaporan (Khusus Admin)
         Route::post('/dokumen/{id}/validasi', [DokumenPelaporanController::class, 'validasi'])->name('api.dokumen.validasi');
+
+        // Validasi Laporan Kinerja Unit (Khusus Admin)
+        Route::patch('/laporan-kinerja/{id}/validasi', [LaporanKinerjaController::class, 'validasi'])->whereNumber('id')->name('api.laporan-kinerja.validasi');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Modul Kinerja Routes (Role: admin, biro, pusat, lab)
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('role:admin,biro,pusat,lab')->group(function () {
+        Route::get('/laporan-kinerja', [LaporanKinerjaController::class, 'index'])->name('api.laporan-kinerja.index');
+        Route::post('/laporan-kinerja', [LaporanKinerjaController::class, 'store'])->name('api.laporan-kinerja.store');
+        Route::get('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'show'])->whereNumber('id')->name('api.laporan-kinerja.show');
+        Route::put('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.update');
+        Route::patch('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.patch');
+        Route::delete('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'destroy'])->whereNumber('id')->name('api.laporan-kinerja.destroy');
     });
 
     /*

@@ -27,7 +27,7 @@ class ProdiController extends Controller
             $query = Prodi::query()
                 ->with([
                     'fakultas:id,singkatan,nama_fakultas',
-                    'users:id,username,role,id_prodi,created_at',
+                    'users:id,username,role,id_fakultas,created_at',
                 ])
                 ->withCount(['users', 'dokumenPelaporan']);
 
@@ -62,7 +62,7 @@ class ProdiController extends Controller
     {
         $prodi = Prodi::with([
             'fakultas:id,singkatan,nama_fakultas',
-            'users:id,username,role,id_prodi,created_at',
+            'users:id,username,role,id_fakultas,created_at',
         ])->withCount(['users', 'dokumenPelaporan'])->find($id);
 
         if (! $prodi) {

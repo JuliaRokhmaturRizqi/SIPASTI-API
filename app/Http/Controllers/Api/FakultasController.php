@@ -22,11 +22,18 @@ class FakultasController extends Controller
     {
         try {
             $fakultas = Fakultas::query()
-                ->with(['prodi' => function ($query) {
-                    $query->select('id', 'id_fakultas', 'nama_prodi', 'periode_mulai_aktif')
-                          ->orderBy('nama_prodi');
-                }])
-                ->withCount('prodi')
+                ->with([
+                    'prodi' => function ($query) {
+                        $query->select('id', 'id_fakultas', 'nama_prodi', 'periode_mulai_aktif')
+                              ->orderBy('nama_prodi');
+                    },
+                    'users' => function ($query) {
+                        $query->select('id', 'username', 'role', 'id_fakultas', 'is_active', 'created_at')
+                              ->where('role', 'user')
+                              ->orderBy('id');
+                    },
+                ])
+                ->withCount(['prodi', 'users'])
                 ->orderBy('id')
                 ->get();
 
@@ -46,17 +53,51 @@ class FakultasController extends Controller
 
     /**
      * POST /api/fakultas
-     * Menambahkan Fakultas baru.
+     * Menambahkan Fakultas baru (Mendukung singkatan opsional dengan auto-generate singkatan unik).
      */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'singkatan'     => ['required', 'string', 'max:20', Rule::unique('fakultas', 'singkatan')->whereNull('deleted_at')],
-            'nama_fakultas' => ['required', 'string', 'max:150', Rule::unique('fakultas', 'nama_fakultas')->whereNull('deleted_at')],
+        $rawNama      = trim((string) $request->input('nama_fakultas', ''));
+        $rawSingkatan = trim((string) $request->input('singkatan', ''));
+
+        // Bersihkan record soft-delete yang mungkin menghalangi index UNIQUE di database
+        if ($rawNama !== '') {
+            Fakultas::onlyTrashed()
+                ->where('nama_fakultas', $rawNama)
+                ->whereDoesntHave('prodi')
+                ->forceDelete();
+        }
+        if ($rawSingkatan !== '') {
+            Fakultas::onlyTrashed()
+                ->where('singkatan', $rawSingkatan)
+                ->whereDoesntHave('prodi')
+                ->forceDelete();
+        }
+
+        $request->merge([
+            'nama_fakultas' => $rawNama,
+            'singkatan'     => $rawSingkatan !== '' ? $rawSingkatan : null,
         ]);
 
+        $validated = $request->validate([
+            'singkatan'     => ['nullable', 'string', 'max:20', Rule::unique('fakultas', 'singkatan')->whereNull('deleted_at')],
+            'nama_fakultas' => ['required', 'string', 'max:150', Rule::unique('fakultas', 'nama_fakultas')->whereNull('deleted_at')],
+        ], [
+            'nama_fakultas.required' => 'Nama Fakultas wajib diisi.',
+            'nama_fakultas.unique'   => 'Nama Fakultas tersebut sudah terdaftar di sistem.',
+            'singkatan.unique'       => 'Singkatan Fakultas tersebut sudah digunakan oleh fakultas lain.',
+            'singkatan.max'          => 'Singkatan maksimal 20 karakter.',
+        ]);
+
+        $finalSingkatan = ! empty($validated['singkatan'])
+            ? $validated['singkatan']
+            : $this->generateUniqueSingkatan($validated['nama_fakultas']);
+
         try {
-            $fakultas = Fakultas::create($validated);
+            $fakultas = Fakultas::create([
+                'nama_fakultas' => $validated['nama_fakultas'],
+                'singkatan'     => $finalSingkatan,
+            ]);
 
             return response()->json([
                 'status'  => 'success',
@@ -87,13 +128,33 @@ class FakultasController extends Controller
             ], 404);
         }
 
-        $validated = $request->validate([
-            'singkatan'     => ['required', 'string', 'max:20', Rule::unique('fakultas', 'singkatan')->ignore($fakultas->id)->whereNull('deleted_at')],
-            'nama_fakultas' => ['required', 'string', 'max:150', Rule::unique('fakultas', 'nama_fakultas')->ignore($fakultas->id)->whereNull('deleted_at')],
+        $rawNama      = trim((string) $request->input('nama_fakultas', ''));
+        $rawSingkatan = trim((string) $request->input('singkatan', ''));
+
+        $request->merge([
+            'nama_fakultas' => $rawNama,
+            'singkatan'     => $rawSingkatan !== '' ? $rawSingkatan : null,
         ]);
 
+        $validated = $request->validate([
+            'singkatan'     => ['nullable', 'string', 'max:20', Rule::unique('fakultas', 'singkatan')->ignore($fakultas->id)->whereNull('deleted_at')],
+            'nama_fakultas' => ['required', 'string', 'max:150', Rule::unique('fakultas', 'nama_fakultas')->ignore($fakultas->id)->whereNull('deleted_at')],
+        ], [
+            'nama_fakultas.required' => 'Nama Fakultas wajib diisi.',
+            'nama_fakultas.unique'   => 'Nama Fakultas tersebut sudah terdaftar di sistem.',
+            'singkatan.unique'       => 'Singkatan Fakultas tersebut sudah digunakan oleh fakultas lain.',
+            'singkatan.max'          => 'Singkatan maksimal 20 karakter.',
+        ]);
+
+        $finalSingkatan = ! empty($validated['singkatan'])
+            ? $validated['singkatan']
+            : $this->generateUniqueSingkatan($validated['nama_fakultas'], $fakultas->id);
+
         try {
-            $fakultas->update($validated);
+            $fakultas->update([
+                'nama_fakultas' => $validated['nama_fakultas'],
+                'singkatan'     => $finalSingkatan,
+            ]);
 
             return response()->json([
                 'status'  => 'success',
@@ -107,6 +168,45 @@ class FakultasController extends Controller
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
+    }
+
+    /**
+     * Helper membuat singkatan otomatis & unik dari nama fakultas apabila dikosongkan.
+     */
+    private function generateUniqueSingkatan(string $namaFakultas, ?int $ignoreId = null): string
+    {
+        $words = preg_split('/\s+/', trim($namaFakultas)) ?: [];
+        $stopWords = ['dan', 'serta', '&', 'di', 'ke', 'dari', 'untuk'];
+
+        $initials = '';
+        foreach ($words as $word) {
+            $clean = preg_replace('/[^a-zA-Z0-9]/', '', $word);
+            if ($clean === '' || in_array(strtolower($clean), $stopWords, true)) {
+                continue;
+            }
+            $initials .= strtoupper(substr($clean, 0, 1));
+        }
+
+        if (strlen($initials) < 2) {
+            $alnum = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $namaFakultas));
+            $initials = substr($alnum !== '' ? $alnum : 'FAK', 0, 8);
+        }
+
+        $base = substr($initials, 0, 15);
+        $candidate = $base;
+        $counter = 2;
+
+        while (
+            Fakultas::withTrashed()
+                ->where('singkatan', $candidate)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $candidate = substr($base, 0, 15) . $counter;
+            $counter++;
+        }
+
+        return $candidate;
     }
 
     /**

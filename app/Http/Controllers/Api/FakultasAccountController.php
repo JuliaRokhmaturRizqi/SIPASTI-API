@@ -127,15 +127,18 @@ class FakultasAccountController extends Controller
                 Rule::exists('fakultas', 'id')->whereNull('deleted_at'),
                 Rule::unique('users', 'id_fakultas')->ignore($user->id),
             ],
-            'password'  => ['nullable', 'string', 'min:6', 'max:100'],
-            'is_active' => ['sometimes', 'boolean'],
+            'password'       => ['nullable', 'string', 'min:6', 'max:100'],
+            'is_active'      => ['sometimes', 'boolean'],
+            'reset_password' => ['nullable', 'boolean'],
         ], [
             'id_fakultas.unique' => 'Fakultas ini sudah memiliki akun operator lain.',
             'username.unique'    => 'Username sudah digunakan oleh akun lain.',
         ]);
 
         try {
-            $user = DB::transaction(function () use ($user, $validated) {
+            $isPasswordReset = false;
+
+            $user = DB::transaction(function () use ($request, $user, $validated, &$isPasswordReset) {
                 $payload = [];
 
                 if (array_key_exists('username', $validated)) {
@@ -148,6 +151,12 @@ class FakultasAccountController extends Controller
 
                 if (! empty($validated['password'])) {
                     $payload['password'] = $validated['password'];
+                } elseif (
+                    $request->boolean('reset_password') ||
+                    ($request->exists('password') && $request->input('password') === '')
+                ) {
+                    $payload['password'] = User::DEFAULT_OPERATOR_PASSWORD;
+                    $isPasswordReset     = true;
                 }
 
                 if (array_key_exists('is_active', $validated)) {
@@ -161,7 +170,9 @@ class FakultasAccountController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Akun operator fakultas berhasil diperbarui.',
+                'message' => $isPasswordReset
+                    ? 'Sandi akun operator fakultas berhasil direset ke default (Unuha2026!).'
+                    : 'Akun operator fakultas berhasil diperbarui.',
                 'data'    => $user,
             ], 200);
         } catch (Throwable $e) {

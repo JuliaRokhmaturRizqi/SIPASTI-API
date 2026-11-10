@@ -88,4 +88,9 @@ class PeriodeAkademik extends Model
     {
         return $this->hasMany(DokumenPelaporan::class, 'id_periode');
     }
+
+    public function laporanKinerja(): HasMany
+    {
+        return $this->hasMany(LaporanKinerja::class, 'id_periode');
+    }
 }
