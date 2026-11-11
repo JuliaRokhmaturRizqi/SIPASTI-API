@@ -11,7 +11,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            class_alias(\App\Support\SimpleDomPdfBridge::class, \Barryvdh\DomPDF\Facade\Pdf::class);
+        }
     }
 
     /**

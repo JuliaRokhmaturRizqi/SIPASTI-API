@@ -7,11 +7,14 @@ use App\Http\Requests\StoreLaporanKinerjaRequest;
 use App\Http\Requests\UpdateLaporanKinerjaRequest;
 use App\Models\LaporanKinerja;
 use App\Models\PeriodeAkademik;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 class LaporanKinerjaController extends Controller
@@ -376,5 +379,45 @@ class LaporanKinerjaController extends Controller
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
+    }
+
+    /**
+     * GET /api/laporan-kinerja/{id}/pdf
+     * Mencetak dan mengunduh dokumen resmi Laporan Kinerja Unit dalam format PDF.
+     * Proteksi IDOR: Hanya Admin atau Operator pemilik unit kerja terkait yang diizinkan mengunduh.
+     */
+    public function cetakPdf(int $id): Response
+    {
+        // 1. Fetch data laporan beserta relasi unitKerja dan periodeAkademik
+        $laporan = LaporanKinerja::with([
+            'unitKerja',
+            'periodeAkademik',
+        ])->findOrFail($id);
+
+        // 2. Keamanan Otorisasi (IDOR Protection) yang ringan & ketat
+        $user = Auth::user();
+        if ($user->role !== 'admin' && (int) $laporan->id_unit_kerja !== (int) $user->id_unit_kerja) {
+            abort(403, 'Anda tidak memiliki akses untuk mengunduh dokumen ini.');
+        }
+
+        // Format tanggal cetak Bahasa Indonesia
+        $bulanIndo = [
+            1  => 'Januari', 2  => 'Februari', 3  => 'Maret', 4  => 'April',
+            5  => 'Mei', 6  => 'Juni', 7  => 'Juli', 8  => 'Agustus',
+            9  => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+        $now          = now();
+        $tanggalCetak = $now->format('d') . ' ' . ($bulanIndo[(int) $now->format('n')] ?? $now->format('F')) . ' ' . $now->format('Y');
+
+        // Bersihkan karakter ilegal sistem file (/ \ : * ? " < > |) dari nama unit agar header Content-Disposition valid
+        $namaUnitClean = preg_replace('/[\/\\\\:*?"<>|]+/', '_', $laporan->unitKerja->nama_unit ?? 'Unit_Kerja');
+
+        // 3. Standardisasi Rendering DOMPDF & paksa response attachment file
+        return Pdf::loadView('pdf.laporan-kinerja', [
+            'laporan'      => $laporan,
+            'tanggalCetak' => $tanggalCetak,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->download('Laporan_Kinerja_' . $namaUnitClean . '.pdf');
     }
 }

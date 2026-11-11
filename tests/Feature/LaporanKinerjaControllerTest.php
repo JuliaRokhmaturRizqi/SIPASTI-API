@@ -184,5 +184,19 @@ class LaporanKinerjaControllerTest extends TestCase
         $updateOwn->assertStatus(200)
             ->assertJsonPath('data.status', 'Review')
             ->assertJsonPath('data.catatan_revisi', null);
+
+        // 8. Cetak PDF: Pemilik unit (Biro) & Admin dapat mengunduh PDF (200 OK, application/pdf), sedangkan Lab ditolak (403)
+        $pdfOwner = $this->get("/api/laporan-kinerja/{$laporanBiro->id}/pdf");
+        $pdfOwner->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        Sanctum::actingAs($this->userLab, ['lab']);
+        $this->getJson("/api/laporan-kinerja/{$laporanBiro->id}/pdf")
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->admin, ['admin']);
+        $pdfAdmin = $this->get("/api/laporan-kinerja/{$laporanBiro->id}/pdf");
+        $pdfAdmin->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/pdf');
     }
 }

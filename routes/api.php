@@ -105,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/laporan-kinerja', [LaporanKinerjaController::class, 'index'])->name('api.laporan-kinerja.index');
         Route::post('/laporan-kinerja', [LaporanKinerjaController::class, 'store'])->name('api.laporan-kinerja.store');
         Route::get('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'show'])->whereNumber('id')->name('api.laporan-kinerja.show');
+        Route::get('/laporan-kinerja/{id}/pdf', [LaporanKinerjaController::class, 'cetakPdf'])->whereNumber('id')->name('api.laporan-kinerja.pdf');
         Route::put('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.update');
         Route::patch('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.patch');
         Route::delete('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'destroy'])->whereNumber('id')->name('api.laporan-kinerja.destroy');
