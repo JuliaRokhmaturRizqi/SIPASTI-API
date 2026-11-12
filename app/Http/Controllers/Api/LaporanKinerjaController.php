@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\LaporanKinerjaExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreLaporanKinerjaRequest;
 use App\Http\Requests\UpdateLaporanKinerjaRequest;
@@ -12,8 +13,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -30,7 +33,8 @@ class LaporanKinerjaController extends Controller
         $request->validate([
             'id_periode'    => ['nullable', 'integer', 'exists:periode_akademik,id'],
             'id_unit_kerja' => ['nullable', 'integer', 'exists:unit_kerja,id'],
-            'kategori_unit' => ['nullable', 'string', Rule::in(['biro', 'pusat', 'lab'])],
+            'kategori_unit' => ['nullable', 'string'],
+            'bulan_laporan' => ['nullable', 'string', 'max:50'],
             'status'        => ['nullable', 'string', Rule::in(LaporanKinerja::STATUS_LIST)],
         ]);
 
@@ -39,7 +43,8 @@ class LaporanKinerjaController extends Controller
 
             $query = LaporanKinerja::query()
                 ->with([
-                    'unitKerja:id,nama_unit,kategori_unit',
+                    'unitKerja:id,nama_unit,id_kategori',
+                    'unitKerja.kategoriUnit:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]);
 
@@ -51,8 +56,8 @@ class LaporanKinerjaController extends Controller
 
                 if ($request->filled('kategori_unit')) {
                     $kategori = $request->input('kategori_unit');
-                    $query->whereHas('unitKerja', function ($q) use ($kategori) {
-                        $q->where('kategori_unit', $kategori);
+                    $query->whereHas('unitKerja.kategoriUnit', function ($q) use ($kategori) {
+                        $q->where('nama_kategori', 'like', "%{$kategori}%");
                     });
                 }
             } else {
@@ -69,6 +74,10 @@ class LaporanKinerjaController extends Controller
 
             if ($request->filled('id_periode')) {
                 $query->where('id_periode', (int) $request->input('id_periode'));
+            }
+
+            if ($request->filled('bulan_laporan')) {
+                $query->where('bulan_laporan', $request->input('bulan_laporan'));
             }
 
             if ($request->filled('status')) {
@@ -97,17 +106,15 @@ class LaporanKinerjaController extends Controller
 
     /**
      * POST /api/laporan-kinerja
-     * Membuat laporan kinerja baru untuk unit kerja yang sedang login.
+     * Membuat laporan kinerja baru khusus untuk unit kerja dari user yang sedang login.
+     * Aturan:
+     * - Validasi duplikat: 1 Bulan = Maksimal 1 Laporan per Unit Kerja per Periode.
+     * - Upload Tanda Tangan Digital (TTD File atau Base64 String dari Canvas).
      */
     public function store(StoreLaporanKinerjaRequest $request): JsonResponse
     {
-        $user      = Auth::user();
-        $validated = $request->validated();
-
-        // Pastikan id_unit_kerja terkunci ke unit milik user yang sedang login (mencegah Parameter Tampering)
-        $idUnitKerja = $user->role === 'admin'
-            ? (int) $validated['id_unit_kerja']
-            : (int) $user->id_unit_kerja;
+        $validatedData = $request->validated();
+        $idUnitKerja   = Auth::user()->id_unit_kerja;
 
         if (! $idUnitKerja) {
             return response()->json([
@@ -117,7 +124,7 @@ class LaporanKinerjaController extends Controller
         }
 
         // Pastikan periode akademik aktif / dibuka
-        $periode = PeriodeAkademik::find((int) $validated['id_periode']);
+        $periode = PeriodeAkademik::find((int) $validatedData['id_periode']);
         if (! $periode || (! $periode->status_aktif && $periode->status_pelaporan !== PeriodeAkademik::STATUS_BUKA)) {
             return response()->json([
                 'status'  => 'error',
@@ -125,30 +132,52 @@ class LaporanKinerjaController extends Controller
             ], 403);
         }
 
+        // Validasi Aturan Bisnis: 1 Bulan = Maksimal 1 Laporan per Unit Kerja per Periode
+        $bulanLaporan = $validatedData['bulan_laporan'] ?? $request->input('bulan_laporan');
+        if (! empty($bulanLaporan)) {
+            $isDuplicate = LaporanKinerja::where('id_unit_kerja', (int) $idUnitKerja)
+                ->where('id_periode', (int) $validatedData['id_periode'])
+                ->where('bulan_laporan', $bulanLaporan)
+                ->exists();
+
+            if ($isDuplicate) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "Unit kerja ini sudah mengunggah laporan untuk bulan {$bulanLaporan} pada periode ini.",
+                ], 422);
+            }
+        }
+
+        // Tangani Upload Tanda Tangan Digital (TTD)
+        $ttdImagePath = $this->handleTtdUpload($request);
+
         try {
-            $laporan = DB::transaction(function () use ($validated, $idUnitKerja, $user) {
-                return LaporanKinerja::create([
-                    'id_unit_kerja'      => $idUnitKerja,
-                    'id_periode'         => (int) $validated['id_periode'],
-                    'nama_kegiatan'      => $validated['nama_kegiatan'],
-                    'uraian'             => $validated['uraian'],
-                    'link_bukti'         => $validated['link_bukti'] ?? null,
-                    'kendala'            => $validated['kendala'] ?? null,
-                    'dukungan'           => $validated['dukungan'] ?? null,
-                    'tindak_lanjut'      => $validated['tindak_lanjut'] ?? null,
-                    'nama_penandatangan' => $validated['nama_penandatangan'],
-                    'status'             => $user->role === 'admin' && ! empty($validated['status'])
-                        ? $validated['status']
-                        : LaporanKinerja::STATUS_REVIEW,
+            $laporan = DB::transaction(function () use ($validatedData, $idUnitKerja, $bulanLaporan, $ttdImagePath) {
+                $payload = [
+                    'id_unit_kerja'      => (int) $idUnitKerja,
+                    'id_periode'         => (int) $validatedData['id_periode'],
+                    'bulan_laporan'      => $bulanLaporan,
+                    'nama_kegiatan'      => $validatedData['nama_kegiatan'],
+                    'uraian'             => $validatedData['uraian'],
+                    'link_bukti'         => $validatedData['link_bukti'] ?? null,
+                    'kendala'            => $validatedData['kendala'] ?? null,
+                    'dukungan'           => $validatedData['dukungan'] ?? null,
+                    'tindak_lanjut'      => $validatedData['tindak_lanjut'] ?? null,
+                    'nama_penandatangan' => $validatedData['nama_penandatangan'],
+                    'ttd_image_path'     => $ttdImagePath,
+                    'status'             => LaporanKinerja::STATUS_REVIEW,
                     'catatan_revisi'     => null,
-                ]);
+                ];
+
+                return LaporanKinerja::create($payload);
             });
 
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Laporan kinerja berhasil disimpan.',
                 'data'    => $laporan->load([
-                    'unitKerja:id,nama_unit,kategori_unit',
+                    'unitKerja:id,nama_unit,id_kategori',
+                    'unitKerja.kategoriUnit:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 201);
@@ -170,7 +199,8 @@ class LaporanKinerjaController extends Controller
         $user = Auth::user();
 
         $laporan = LaporanKinerja::with([
-            'unitKerja:id,nama_unit,kategori_unit',
+            'unitKerja:id,nama_unit,id_kategori',
+            'unitKerja.kategoriUnit:id,nama_kategori',
             'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
         ])->find($id);
 
@@ -223,8 +253,31 @@ class LaporanKinerjaController extends Controller
 
         $validated = $request->validated();
 
+        $targetPeriode = isset($validated['id_periode']) ? (int) $validated['id_periode'] : (int) $laporan->id_periode;
+        $targetBulan   = array_key_exists('bulan_laporan', $validated)
+            ? $validated['bulan_laporan']
+            : ($request->has('bulan_laporan') ? $request->input('bulan_laporan') : $laporan->bulan_laporan);
+
+        // Validasi keunikan bulan jika bulan / periode diubah
+        if (! empty($targetBulan) && ($targetBulan !== $laporan->bulan_laporan || $targetPeriode !== (int) $laporan->id_periode)) {
+            $isDuplicate = LaporanKinerja::where('id_unit_kerja', (int) $laporan->id_unit_kerja)
+                ->where('id_periode', $targetPeriode)
+                ->where('bulan_laporan', $targetBulan)
+                ->where('id', '!=', $laporan->id)
+                ->exists();
+
+            if ($isDuplicate) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "Unit kerja ini sudah mengunggah laporan untuk bulan {$targetBulan} pada periode ini.",
+                ], 422);
+            }
+        }
+
+        $ttdImagePath = $this->handleTtdUpload($request, $laporan->ttd_image_path);
+
         try {
-            DB::transaction(function () use ($laporan, $validated, $user) {
+            DB::transaction(function () use ($laporan, $validated, $user, $targetBulan, $targetPeriode, $ttdImagePath) {
                 $payload = [
                     'nama_kegiatan'      => $validated['nama_kegiatan'],
                     'uraian'             => $validated['uraian'],
@@ -233,11 +286,10 @@ class LaporanKinerjaController extends Controller
                     'dukungan'           => $validated['dukungan'] ?? null,
                     'tindak_lanjut'      => $validated['tindak_lanjut'] ?? null,
                     'nama_penandatangan' => $validated['nama_penandatangan'],
+                    'id_periode'         => $targetPeriode,
+                    'bulan_laporan'      => $targetBulan,
+                    'ttd_image_path'     => $ttdImagePath,
                 ];
-
-                if (isset($validated['id_periode'])) {
-                    $payload['id_periode'] = (int) $validated['id_periode'];
-                }
 
                 // Jika diedit oleh operator unit (misal perbaikan dari Revisi), kembalikan status ke Review
                 if ($user->role !== 'admin') {
@@ -254,7 +306,8 @@ class LaporanKinerjaController extends Controller
                 'status'  => 'success',
                 'message' => 'Laporan kinerja berhasil diperbarui.',
                 'data'    => $laporan->fresh([
-                    'unitKerja:id,nama_unit,kategori_unit',
+                    'unitKerja:id,nama_unit,id_kategori',
+                    'unitKerja.kategoriUnit:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 200);
@@ -329,7 +382,8 @@ class LaporanKinerjaController extends Controller
                 'status'  => 'success',
                 'message' => "Status laporan kinerja berhasil diperbarui menjadi {$laporan->status}.",
                 'data'    => $laporan->fresh([
-                    'unitKerja:id,nama_unit,kategori_unit',
+                    'unitKerja:id,nama_unit,id_kategori',
+                    'unitKerja.kategoriUnit:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 200);
@@ -366,6 +420,10 @@ class LaporanKinerjaController extends Controller
         }
 
         try {
+            if ($laporan->ttd_image_path && Storage::disk('public')->exists($laporan->ttd_image_path)) {
+                Storage::disk('public')->delete($laporan->ttd_image_path);
+            }
+
             $laporan->delete();
 
             return response()->json([
@@ -384,13 +442,16 @@ class LaporanKinerjaController extends Controller
     /**
      * GET /api/laporan-kinerja/{id}/pdf
      * Mencetak dan mengunduh dokumen resmi Laporan Kinerja Unit dalam format PDF.
-     * Proteksi IDOR: Hanya Admin atau Operator pemilik unit kerja terkait yang diizinkan mengunduh.
+     * Fitur:
+     * - Auto-Date Bahasa Indonesia (contoh: "12 November 2026").
+     * - Rendering Tanda Tangan Digital (Base64 Data URI) tanpa isu resolusi jaringan.
+     * - Proteksi IDOR: Hanya Admin atau Operator pemilik unit kerja terkait yang diizinkan mengunduh.
      */
     public function cetakPdf(int $id): Response
     {
         // 1. Fetch data laporan beserta relasi unitKerja dan periodeAkademik
         $laporan = LaporanKinerja::with([
-            'unitKerja',
+            'unitKerja.kategoriUnit',
             'periodeAkademik',
         ])->findOrFail($id);
 
@@ -400,24 +461,116 @@ class LaporanKinerjaController extends Controller
             abort(403, 'Anda tidak memiliki akses untuk mengunduh dokumen ini.');
         }
 
-        // Format tanggal cetak Bahasa Indonesia
+        // Format tanggal Bahasa Indonesia otomatis (Auto-date)
         $bulanIndo = [
             1  => 'Januari', 2  => 'Februari', 3  => 'Maret', 4  => 'April',
             5  => 'Mei', 6  => 'Juni', 7  => 'Juli', 8  => 'Agustus',
             9  => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
         ];
-        $now          = now();
-        $tanggalCetak = $now->format('d') . ' ' . ($bulanIndo[(int) $now->format('n')] ?? $now->format('F')) . ' ' . $now->format('Y');
+        $dateObj      = $laporan->created_at ?? now();
+        $tanggalCetak = $dateObj->format('d') . ' ' . ($bulanIndo[(int) $dateObj->format('n')] ?? $dateObj->format('F')) . ' ' . $dateObj->format('Y');
 
-        // Bersihkan karakter ilegal sistem file (/ \ : * ? " < > |) dari nama unit agar header Content-Disposition valid
+        // Render TTD jika tersedia menjadi Base64 Data URI agar 100% aman di DOMPDF
+        $ttdBase64 = null;
+        if (! empty($laporan->ttd_image_path)) {
+            $storagePath = storage_path('app/public/' . $laporan->ttd_image_path);
+            $publicPath  = public_path('storage/' . $laporan->ttd_image_path);
+            $filePath    = file_exists($storagePath) ? $storagePath : (file_exists($publicPath) ? $publicPath : null);
+
+            if ($filePath && is_readable($filePath)) {
+                $mimeType = @mime_content_type($filePath) ?: 'image/png';
+                $binary   = @file_get_contents($filePath);
+                if ($binary !== false) {
+                    $ttdBase64 = 'data:' . $mimeType . ';base64,' . base64_encode($binary);
+                }
+            }
+        }
+
+        // Bersihkan karakter ilegal sistem file dari nama file attachment
         $namaUnitClean = preg_replace('/[\/\\\\:*?"<>|]+/', '_', $laporan->unitKerja->nama_unit ?? 'Unit_Kerja');
 
-        // 3. Standardisasi Rendering DOMPDF & paksa response attachment file
+        // 3. Rendering PDF & paksa response attachment download
         return Pdf::loadView('pdf.laporan-kinerja', [
             'laporan'      => $laporan,
             'tanggalCetak' => $tanggalCetak,
+            'ttdBase64'    => $ttdBase64,
         ])
             ->setPaper('a4', 'portrait')
             ->download('Laporan_Kinerja_' . $namaUnitClean . '.pdf');
+    }
+
+    /**
+     * GET /api/laporan-kinerja/export/excel
+     * Mengekspor rekapitulasi seluruh Laporan Kinerja Unit ke dalam file Excel (.xlsx).
+     * Keamanan Otorisasi: Hanya role 'admin' yang diizinkan mengakses endpoint ini.
+     */
+    public function exportExcel(Request $request): Response
+    {
+        if (Auth::user()?->role !== 'admin') {
+            abort(403, 'Forbidden. Hanya Admin yang diizinkan mengunduh rekapitulasi Excel.');
+        }
+
+        $idPeriode    = $request->filled('id_periode') ? (int) $request->input('id_periode') : null;
+        $kategoriUnit = $request->filled('kategori_unit') ? (string) $request->input('kategori_unit') : null;
+
+        return Excel::download(
+            new LaporanKinerjaExport($idPeriode, $kategoriUnit),
+            'Rekap_Kinerja_Unit.xlsx'
+        );
+    }
+
+    /**
+     * Helper untuk memproses upload tanda tangan digital.
+     * Menerima UploadedFile atau Base64 String dari Canvas HTML5.
+     * Menyimpan berkas ke disk 'public' direktori 'ttd' dan mengembalikan relative path-nya.
+     */
+    protected function handleTtdUpload(Request $request, ?string $currentPath = null): ?string
+    {
+        // 1. Upload file via multipart/form-data
+        $file = $request->file('ttd_image') ?? $request->file('ttd') ?? $request->file('tanda_tangan');
+        if ($file && $file->isValid()) {
+            if ($currentPath && Storage::disk('public')->exists($currentPath)) {
+                Storage::disk('public')->delete($currentPath);
+            }
+
+            $filename = 'ttd_' . Str::random(24) . '.' . $file->getClientOriginalExtension();
+            return $file->storeAs('ttd', $filename, 'public');
+        }
+
+        // 2. String Base64 dari frontend canvas
+        $base64Data = $request->input('ttd_base64')
+            ?? $request->input('ttd_image')
+            ?? $request->input('ttd')
+            ?? $request->input('tanda_tangan');
+
+        if (is_string($base64Data) && str_starts_with($base64Data, 'data:image/')) {
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+                $raw = substr($base64Data, strpos($base64Data, ',') + 1);
+                $ext = strtolower($type[1]);
+                if ($ext === 'jpeg') {
+                    $ext = 'jpg';
+                }
+
+                $decoded = base64_decode($raw);
+                if ($decoded !== false) {
+                    if ($currentPath && Storage::disk('public')->exists($currentPath)) {
+                        Storage::disk('public')->delete($currentPath);
+                    }
+
+                    $filename = 'ttd_' . Str::random(24) . '.' . $ext;
+                    $relPath  = 'ttd/' . $filename;
+                    Storage::disk('public')->put($relPath, $decoded);
+
+                    return $relPath;
+                }
+            }
+        }
+
+        // 3. String path yang sudah ada
+        if ($request->filled('ttd_image_path') && is_string($request->input('ttd_image_path'))) {
+            return $request->input('ttd_image_path');
+        }
+
+        return $currentPath;
     }
 }

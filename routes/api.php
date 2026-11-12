@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DokumenPelaporanController;
 use App\Http\Controllers\Api\FakultasAccountController;
 use App\Http\Controllers\Api\FakultasController;
+use App\Http\Controllers\Api\KategoriUnitController;
 use App\Http\Controllers\Api\LaporanKinerjaController;
 use App\Http\Controllers\Api\PeriodeController;
 use App\Http\Controllers\Api\ProdiAccountController;
 use App\Http\Controllers\Api\ProdiController;
+use App\Http\Controllers\Api\UnitKerjaController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -89,10 +91,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/akun-prodi/{id}/toggle-status', [ProdiAccountController::class, 'toggleStatus'])->name('api.akun-prodi.toggle-status');
         Route::delete('/akun-prodi/{id}', [ProdiAccountController::class, 'destroy'])->name('api.akun-prodi.destroy');
 
+        // Manajemen Master Data Kategori Unit Kerja (Khusus Admin)
+        Route::apiResource('/kategori-unit', KategoriUnitController::class);
+
+        // Manajemen Master Data Unit Kerja (Khusus Admin)
+        Route::apiResource('/unit-kerja', UnitKerjaController::class);
+
         // Validasi Dokumen Pelaporan (Khusus Admin)
         Route::post('/dokumen/{id}/validasi', [DokumenPelaporanController::class, 'validasi'])->name('api.dokumen.validasi');
 
-        // Validasi Laporan Kinerja Unit (Khusus Admin)
+        // Validasi & Export Excel Laporan Kinerja Unit (Khusus Admin)
+        Route::get('/laporan-kinerja/export/excel', [LaporanKinerjaController::class, 'exportExcel'])->name('api.laporan-kinerja.export.excel');
         Route::patch('/laporan-kinerja/{id}/validasi', [LaporanKinerjaController::class, 'validasi'])->whereNumber('id')->name('api.laporan-kinerja.validasi');
     });
 

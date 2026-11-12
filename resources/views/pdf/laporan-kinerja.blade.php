@@ -142,8 +142,8 @@
             margin-top: 28px;
         }
         .ttd-box {
-            width: 45%;
-            margin-left: 55%;
+            width: 48%;
+            margin-left: 52%;
             text-align: left;
         }
         .ttd-box p {
@@ -151,6 +151,15 @@
         }
         .ttd-space {
             height: 65px;
+        }
+        .ttd-img-container {
+            height: 65px;
+            margin: 4px 0;
+        }
+        .ttd-img {
+            max-height: 62px;
+            max-width: 175px;
+            display: block;
         }
         .ttd-nama {
             font-weight: bold;
@@ -180,9 +189,12 @@
     <div class="kop-garis-tipis"></div>
 
     <!-- JUDUL DOKUMEN -->
+    @php
+        $kategoriNama = $laporan->unitKerja->kategoriUnit->nama_kategori ?? $laporan->unitKerja->kategori_unit ?? 'UNIT';
+    @endphp
     <div class="judul-dokumen">
         <h2>Laporan Kinerja Unit Kerja</h2>
-        <p>Nomor Dokumen: LK/{{ strtoupper($laporan->unitKerja->kategori_unit ?? 'UNIT') }}/{{ $laporan->id }}/{{ date('Y') }}</p>
+        <p>Nomor Dokumen: LK/{{ strtoupper($kategoriNama) }}/{{ $laporan->id }}/{{ date('Y') }}</p>
     </div>
 
     <!-- IDENTITAS PELAPORAN -->
@@ -195,13 +207,20 @@
         <tr>
             <td class="label">Kategori Unit</td>
             <td class="colon">:</td>
-            <td class="value">{{ strtoupper($laporan->unitKerja->kategori_unit ?? '-') }}</td>
+            <td class="value">{{ strtoupper($kategoriNama) }}</td>
         </tr>
         <tr>
             <td class="label">Periode Pelaporan</td>
             <td class="colon">:</td>
             <td class="value">{{ $laporan->periodeAkademik->nama_periode ?? '-' }}</td>
         </tr>
+        @if(!empty($laporan->bulan_laporan))
+        <tr>
+            <td class="label">Bulan Pelaporan</td>
+            <td class="colon">:</td>
+            <td class="value"><strong>{{ $laporan->bulan_laporan }}</strong></td>
+        </tr>
+        @endif
         <tr>
             <td class="label">Nama Kegiatan</td>
             <td class="colon">:</td>
@@ -253,10 +272,20 @@
     <!-- AREA TANDA TANGAN -->
     <div class="ttd-wrapper">
         <div class="ttd-box">
-            <p>OKU Timur, {{ $tanggalCetak ?? date('d F Y') }}</p>
+            <p>OKU Timur, {{ $tanggalCetak ?? ($laporan->created_at ? $laporan->created_at->format('d F Y') : date('d F Y')) }}</p>
             <p>Penanggung Jawab / Penandatangan,</p>
             <p><strong>{{ $laporan->unitKerja->nama_unit ?? 'Unit Kerja' }}</strong></p>
-            <div class="ttd-space"></div>
+            @if(!empty($ttdBase64))
+                <div class="ttd-img-container">
+                    <img src="{{ $ttdBase64 }}" alt="Tanda Tangan Digital" class="ttd-img" />
+                </div>
+            @elseif(!empty($laporan->ttd_image_path) && file_exists(storage_path('app/public/' . $laporan->ttd_image_path)))
+                <div class="ttd-img-container">
+                    <img src="{{ storage_path('app/public/' . $laporan->ttd_image_path) }}" alt="Tanda Tangan Digital" class="ttd-img" />
+                </div>
+            @else
+                <div class="ttd-space"></div>
+            @endif
             <p class="ttd-nama">{{ $laporan->nama_penandatangan }}</p>
         </div>
     </div>

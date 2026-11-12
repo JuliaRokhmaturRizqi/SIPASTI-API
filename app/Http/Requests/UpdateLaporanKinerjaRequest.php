@@ -29,6 +29,7 @@ class UpdateLaporanKinerjaRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $textFields = [
+            'bulan_laporan',
             'nama_kegiatan',
             'uraian',
             'kendala',
@@ -66,6 +67,7 @@ class UpdateLaporanKinerjaRequest extends FormRequest
     {
         return [
             'id_periode'         => ['sometimes', 'required', 'integer', Rule::exists('periode_akademik', 'id')],
+            'bulan_laporan'      => ['nullable', 'string', 'max:50'],
             'nama_kegiatan'      => ['required', 'string', 'max:255'],
             'uraian'             => ['required', 'string'],
             'link_bukti'         => ['nullable', 'string', 'url:http,https', 'max:500'],
@@ -73,6 +75,11 @@ class UpdateLaporanKinerjaRequest extends FormRequest
             'dukungan'           => ['nullable', 'string'],
             'tindak_lanjut'      => ['nullable', 'string'],
             'nama_penandatangan' => ['required', 'string', 'max:255'],
+            'ttd_image'          => ['nullable'],
+            'ttd'                => ['nullable'],
+            'tanda_tangan'       => ['nullable'],
+            'ttd_base64'         => ['nullable', 'string'],
+            'ttd_image_path'     => ['nullable', 'string', 'max:255'],
             'status'             => ['nullable', 'string', Rule::in(['Review', 'Revisi', 'Selesai'])],
         ];
     }

@@ -199,4 +199,69 @@ class LaporanKinerjaControllerTest extends TestCase
         $pdfAdmin->assertStatus(200)
             ->assertHeader('Content-Type', 'application/pdf');
     }
+
+    public function test_unit_kerja_master_crud_and_admin_bypass_input_on_laporan_kinerja(): void
+    {
+        // 1. Non-admin ditolak mengakses Master Data Unit Kerja (/api/unit-kerja) -> 403 Forbidden
+        Sanctum::actingAs($this->userBiro, ['biro']);
+        $this->getJson('/api/unit-kerja')->assertStatus(403);
+        $this->postJson('/api/unit-kerja', [
+            'nama_unit'     => 'Pusat Bahasa Testing',
+            'kategori_unit' => 'pusat',
+        ])->assertStatus(403);
+
+        // 2. Admin dapat melakukan CRUD Master Data Unit Kerja (termasuk kategori 'fakultas')
+        Sanctum::actingAs($this->admin, ['admin']);
+        UnitKerja::whereIn('nama_unit', ['Pusat Penjaminan Mutu Testing', 'Fakultas Ekonomi Testing'])->delete();
+
+        $createUnit = $this->postJson('/api/unit-kerja', [
+            'nama_unit'     => 'Pusat Penjaminan Mutu Testing',
+            'kategori_unit' => 'pusat',
+        ]);
+        $createUnit->assertStatus(201)
+            ->assertJsonPath('data.nama_unit', 'Pusat Penjaminan Mutu Testing')
+            ->assertJsonPath('data.kategori_unit', 'pusat');
+
+        $newUnitId = $createUnit->json('data.id');
+
+        // Validasi unique nama_unit
+        $this->postJson('/api/unit-kerja', [
+            'nama_unit'     => 'Pusat Penjaminan Mutu Testing',
+            'kategori_unit' => 'pusat',
+        ])->assertStatus(422)
+          ->assertJsonValidationErrors(['nama_unit']);
+
+        // Update Unit Kerja ke kategori 'fakultas'
+        $updateUnit = $this->putJson("/api/unit-kerja/{$newUnitId}", [
+            'nama_unit'     => 'Fakultas Ekonomi Testing',
+            'kategori_unit' => 'fakultas',
+        ]);
+        $updateUnit->assertStatus(200)
+            ->assertJsonPath('data.nama_unit', 'Fakultas Ekonomi Testing')
+            ->assertJsonPath('data.kategori_unit', 'fakultas');
+
+        // 3. Aturan Ketat: Admin TIDAK diizinkan membuat laporan kinerja baru (403 Forbidden)
+        $adminStoreRes = $this->postJson('/api/laporan-kinerja', [
+            'id_periode'         => $this->periode->id,
+            'nama_kegiatan'      => 'Audit Mutu Internal',
+            'uraian'             => 'Pelaksanaan AMI tahunan.',
+            'nama_penandatangan' => 'Ketua LPM',
+        ]);
+        $adminStoreRes->assertStatus(403);
+
+        // 4. Delete Unit Kerja
+        $this->deleteJson("/api/unit-kerja/{$newUnitId}")
+            ->assertStatus(200);
+        $this->assertDatabaseMissing('unit_kerja', ['id' => $newUnitId]);
+
+        // 5. Export Excel: Non-admin ditolak (403 Forbidden), Admin diizinkan (200 OK, .xlsx)
+        Sanctum::actingAs($this->userBiro, ['biro']);
+        $this->getJson('/api/laporan-kinerja/export/excel')
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->admin, ['admin']);
+        $excelRes = $this->get('/api/laporan-kinerja/export/excel');
+        $excelRes->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
 }

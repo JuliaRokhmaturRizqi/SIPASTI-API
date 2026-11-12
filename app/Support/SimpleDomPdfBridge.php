@@ -88,8 +88,9 @@ class SimpleDomPdfBridge
         $tanggalCetak = $this->data['tanggalCetak'] ?? date('d F Y');
 
         $namaUnit          = (string) ($laporan?->unitKerja?->nama_unit ?? '-');
-        $kategoriUnit      = strtoupper((string) ($laporan?->unitKerja?->kategori_unit ?? 'UNIT'));
+        $kategoriUnit      = strtoupper((string) ($laporan?->unitKerja?->kategoriUnit?->nama_kategori ?? $laporan?->unitKerja?->kategori_unit ?? 'UNIT'));
         $namaPeriode       = (string) ($laporan?->periodeAkademik?->nama_periode ?? '-');
+        $bulanLaporan      = (string) ($laporan?->bulan_laporan ?? '');
         $namaKegiatan      = (string) ($laporan?->nama_kegiatan ?? '-');
         $statusValidasi    = (string) ($laporan?->status ?? 'Review');
         $uraian            = (string) ($laporan?->uraian ?? '-');
@@ -134,9 +135,14 @@ class SimpleDomPdfBridge
             ['Nama Unit Kerja', $namaUnit, true],
             ['Kategori Unit', $kategoriUnit, false],
             ['Periode Pelaporan', $namaPeriode, false],
-            ['Nama Kegiatan', $namaKegiatan, true],
-            ['Status Validasi', strtoupper($statusValidasi), true],
         ];
+
+        if ($bulanLaporan !== '') {
+            $identitas[] = ['Bulan Pelaporan', $bulanLaporan, true];
+        }
+
+        $identitas[] = ['Nama Kegiatan', $namaKegiatan, true];
+        $identitas[] = ['Status Validasi', strtoupper($statusValidasi), true];
 
         foreach ($identitas as [$label, $val, $bold]) {
             $drawText(60, $y, $label, 'F2', 10);

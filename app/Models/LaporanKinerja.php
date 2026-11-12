@@ -30,6 +30,7 @@ class LaporanKinerja extends Model
     protected $fillable = [
         'id_unit_kerja',
         'id_periode',
+        'bulan_laporan',
         'nama_kegiatan',
         'uraian',
         'link_bukti',
@@ -37,6 +38,7 @@ class LaporanKinerja extends Model
         'dukungan',
         'tindak_lanjut',
         'nama_penandatangan',
+        'ttd_image_path',
         'status',
         'catatan_revisi',
     ];
@@ -80,6 +82,11 @@ class LaporanKinerja extends Model
     /**
      * Mutator sanitasi XSS (Defense-in-Depth) menggunakan strip_tags.
      */
+    public function setBulanLaporanAttribute(?string $value): void
+    {
+        $this->attributes['bulan_laporan'] = $value !== null ? trim(strip_tags($value)) : null;
+    }
+
     public function setNamaKegiatanAttribute(?string $value): void
     {
         $this->attributes['nama_kegiatan'] = $value !== null ? trim(strip_tags($value)) : null;
