@@ -122,6 +122,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,biro,pusat,lab')->group(function () {
         Route::get('/laporan-kinerja', [LaporanKinerjaController::class, 'index'])->name('api.laporan-kinerja.index');
         Route::post('/laporan-kinerja', [LaporanKinerjaController::class, 'store'])->name('api.laporan-kinerja.store');
+        Route::post('/laporan-kinerja/{id}/approve', [LaporanKinerjaController::class, 'approve'])->whereNumber('id')->name('api.laporan-kinerja.approve');
         Route::get('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'show'])->whereNumber('id')->name('api.laporan-kinerja.show');
         Route::get('/laporan-kinerja/{id}/pdf', [LaporanKinerjaController::class, 'cetakPdf'])->whereNumber('id')->name('api.laporan-kinerja.pdf');
         Route::match(['put', 'patch', 'post'], '/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.update');
