@@ -438,6 +438,7 @@ class LaporanKinerjaController extends Controller
                     $payload['status_laporan'] = LaporanKinerja::STATUS_MENUNGGU_PIMPINAN;
                     $payload['status']         = LaporanKinerja::STATUS_REVIEW;
                     $payload['catatan_revisi'] = null;
+                    $payload['catatan_admin']  = null;
                 } else {
                     if (! empty($validated['status_laporan'])) {
                         $payload['status_laporan'] = $validated['status_laporan'];
@@ -463,6 +464,91 @@ class LaporanKinerjaController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Terjadi kesalahan saat memperbarui laporan kinerja.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * POST/PATCH /api/laporan-kinerja/{id}/validasi-admin
+     * Endpoint khusus Admin untuk memvalidasi laporan kinerja pada alur persetujuan bertingkat.
+     * Keamanan:
+     * 1. Hanya role 'admin' yang diizinkan.
+     * 2. Laporan wajib berstatus 'menunggu_admin' (telah disetujui Pimpinan Unit).
+     */
+    public function validasiAdmin(Request $request, $id): JsonResponse
+    {
+        $user = Auth::user();
+
+        // 1. Keamanan Role Admin
+        if (! $user || $user->role !== 'admin') {
+            abort(403, 'Hanya Admin yang dapat memvalidasi laporan.');
+        }
+
+        $laporan = LaporanKinerja::findOrFail($id);
+
+        // 2. Pastikan laporan berstatus 'menunggu_admin'
+        if ($laporan->status_laporan !== LaporanKinerja::STATUS_MENUNGGU_ADMIN) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Laporan ini belum dapat divalidasi oleh Admin karena statusnya bukan menunggu_admin.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'status'         => ['required', 'string', Rule::in(['selesai', 'revisi_admin', 'tolak', 'Selesai', 'Revisi'])],
+            'catatan_admin'  => [
+                Rule::requiredIf(fn () => in_array(strtolower((string) $request->input('status')), ['revisi_admin', 'tolak', 'revisi'], true) && ! $request->filled('catatan_revisi')),
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+            'catatan_revisi' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'status.required'        => 'Status validasi Admin wajib dipilih.',
+            'status.in'              => 'Status validasi Admin harus bernilai selesai atau revisi_admin.',
+            'catatan_admin.required' => 'Catatan revisi Admin wajib diisi apabila laporan ditolak.',
+        ]);
+
+        $statusNormalized = strtolower($validated['status']);
+
+        try {
+            DB::transaction(function () use ($laporan, $validated, $statusNormalized) {
+                if ($statusNormalized === 'selesai') {
+                    $laporan->status_laporan = LaporanKinerja::STATUS_SELESAI;
+                    $laporan->status         = LaporanKinerja::STATUS_SELESAI;
+                    $laporan->catatan_admin  = null;
+                    $laporan->catatan_revisi = null;
+                } else {
+                    $rawCatatan   = $validated['catatan_admin'] ?? $validated['catatan_revisi'] ?? null;
+                    $cleanCatatan = $rawCatatan !== null ? trim(strip_tags($rawCatatan)) : null;
+
+                    $laporan->status_laporan = LaporanKinerja::STATUS_REVISI_ADMIN;
+                    $laporan->status         = LaporanKinerja::STATUS_REVISI;
+                    $laporan->catatan_admin  = $cleanCatatan;
+                    $laporan->catatan_revisi = $cleanCatatan;
+                }
+
+                $laporan->save();
+            });
+
+            $pesan = $statusNormalized === 'selesai'
+                ? 'Laporan kinerja telah disahkan oleh Admin dengan status selesai.'
+                : 'Laporan kinerja dikembalikan oleh Admin untuk direvisi.';
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => $pesan,
+                'data'    => $laporan->fresh([
+                    'unitKerja:id,nama_unit,id_kategori',
+                    'unitKerja.kategori:id,nama_kategori',
+                    'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
+                ]),
+            ], 200);
+        } catch (Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Terjadi kesalahan saat memvalidasi laporan kinerja.',
                 'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }

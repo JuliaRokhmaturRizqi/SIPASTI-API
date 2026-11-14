@@ -111,7 +111,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Validasi & Export Excel Laporan Kinerja Unit (Khusus Admin)
         Route::get('/laporan-kinerja/export/excel', [LaporanKinerjaController::class, 'exportExcel'])->name('api.laporan-kinerja.export.excel');
-        Route::patch('/laporan-kinerja/{id}/validasi', [LaporanKinerjaController::class, 'validasi'])->whereNumber('id')->name('api.laporan-kinerja.validasi');
+        Route::match(['post', 'patch'], '/laporan-kinerja/{id}/validasi-admin', [LaporanKinerjaController::class, 'validasiAdmin'])->whereNumber('id')->name('api.laporan-kinerja.validasi-admin');
+        Route::match(['post', 'patch'], '/laporan-kinerja/{id}/validasi', [LaporanKinerjaController::class, 'validasi'])->whereNumber('id')->name('api.laporan-kinerja.validasi');
     });
 
     /*

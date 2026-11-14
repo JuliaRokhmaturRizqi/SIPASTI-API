@@ -311,6 +311,40 @@ class ApprovalWorkflowModelTest extends TestCase
         $this->assertNotNull($approveRes->json('data.ttd_pimpinan_path'));
         Storage::disk('public')->assertExists($approveRes->json('data.ttd_pimpinan_path'));
 
+        // 8. Validasi Admin (validasiAdmin):
+        // Non-admin ditolak (403)
+        $this->postJson("/api/laporan-kinerja/{$laporanId}/validasi-admin", [
+            'status' => 'selesai',
+        ])->assertStatus(403);
+
+        $admin = User::where('username', 'admin')->firstOrFail();
+        Sanctum::actingAs($admin, ['admin']);
+
+        // Admin menolak ('revisi_admin') -> status_laporan menjadi 'revisi_admin' & menyimpan catatan_admin
+        $adminRejectRes = $this->postJson("/api/laporan-kinerja/{$laporanId}/validasi-admin", [
+            'status'        => 'revisi_admin',
+            'catatan_admin' => 'Mohon perjelas indikator output pada rencana tindak lanjut.',
+        ]);
+        $adminRejectRes->assertStatus(200)
+            ->assertJsonPath('data.status_laporan', 'revisi_admin')
+            ->assertJsonPath('data.catatan_admin', 'Mohon perjelas indikator output pada rencana tindak lanjut.');
+
+        // Kembalikan status ke 'menunggu_admin' setelah disetujui ulang oleh pimpinan
+        LaporanKinerja::where('id', $laporanId)->update(['status_laporan' => 'menunggu_admin']);
+
+        // Admin menyetujui ('selesai') -> status_laporan menjadi 'selesai'
+        $adminApproveRes = $this->postJson("/api/laporan-kinerja/{$laporanId}/validasi-admin", [
+            'status' => 'selesai',
+        ]);
+        $adminApproveRes->assertStatus(200)
+            ->assertJsonPath('data.status_laporan', 'selesai')
+            ->assertJsonPath('data.catatan_admin', null);
+
+        // 9. Cetak PDF dengan template multi-tabel & dua kolom tanda tangan -> 200 OK
+        $pdfRes = $this->get("/api/laporan-kinerja/{$laporanId}/pdf");
+        $pdfRes->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/pdf');
+
         // Cleanup
         LaporanKinerja::whereIn('id_unit_kerja', [$unitA->id, $unitB->id])->delete();
         User::whereIn('username', ['staf_unit_a_test', 'pimpinan_unit_a_test', 'pimpinan_unit_b_test'])->delete();

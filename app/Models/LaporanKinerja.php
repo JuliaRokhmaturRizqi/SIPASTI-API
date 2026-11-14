@@ -66,6 +66,7 @@ class LaporanKinerja extends Model
         'ttd_image_path',
         'status',
         'catatan_revisi',
+        'catatan_admin',
     ];
 
     /**
@@ -198,6 +199,11 @@ class LaporanKinerja extends Model
     public function setCatatanRevisiAttribute(?string $value): void
     {
         $this->attributes['catatan_revisi'] = $value !== null ? trim(strip_tags($value)) : null;
+    }
+
+    public function setCatatanAdminAttribute(?string $value): void
+    {
+        $this->attributes['catatan_admin'] = $value !== null ? trim(strip_tags($value)) : null;
     }
 
     /**
