@@ -44,7 +44,7 @@ class LaporanKinerjaController extends Controller
             $query = LaporanKinerja::query()
                 ->with([
                     'unitKerja:id,nama_unit,id_kategori',
-                    'unitKerja.kategoriUnit:id,nama_kategori',
+                    'unitKerja.kategori:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]);
 
@@ -56,7 +56,7 @@ class LaporanKinerjaController extends Controller
 
                 if ($request->filled('kategori_unit')) {
                     $kategori = $request->input('kategori_unit');
-                    $query->whereHas('unitKerja.kategoriUnit', function ($q) use ($kategori) {
+                    $query->whereHas('unitKerja.kategori', function ($q) use ($kategori) {
                         $q->where('nama_kategori', 'like', "%{$kategori}%");
                     });
                 }
@@ -177,7 +177,7 @@ class LaporanKinerjaController extends Controller
                 'message' => 'Laporan kinerja berhasil disimpan.',
                 'data'    => $laporan->load([
                     'unitKerja:id,nama_unit,id_kategori',
-                    'unitKerja.kategoriUnit:id,nama_kategori',
+                    'unitKerja.kategori:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 201);
@@ -200,7 +200,7 @@ class LaporanKinerjaController extends Controller
 
         $laporan = LaporanKinerja::with([
             'unitKerja:id,nama_unit,id_kategori',
-            'unitKerja.kategoriUnit:id,nama_kategori',
+            'unitKerja.kategori:id,nama_kategori',
             'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
         ])->find($id);
 
@@ -307,7 +307,7 @@ class LaporanKinerjaController extends Controller
                 'message' => 'Laporan kinerja berhasil diperbarui.',
                 'data'    => $laporan->fresh([
                     'unitKerja:id,nama_unit,id_kategori',
-                    'unitKerja.kategoriUnit:id,nama_kategori',
+                    'unitKerja.kategori:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 200);
@@ -383,7 +383,7 @@ class LaporanKinerjaController extends Controller
                 'message' => "Status laporan kinerja berhasil diperbarui menjadi {$laporan->status}.",
                 'data'    => $laporan->fresh([
                     'unitKerja:id,nama_unit,id_kategori',
-                    'unitKerja.kategoriUnit:id,nama_kategori',
+                    'unitKerja.kategori:id,nama_kategori',
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]),
             ], 200);
@@ -451,7 +451,7 @@ class LaporanKinerjaController extends Controller
     {
         // 1. Fetch data laporan beserta relasi unitKerja dan periodeAkademik
         $laporan = LaporanKinerja::with([
-            'unitKerja.kategoriUnit',
+            'unitKerja.kategori',
             'periodeAkademik',
         ])->findOrFail($id);
 

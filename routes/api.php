@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\LaporanKinerjaController;
 use App\Http\Controllers\Api\PeriodeController;
 use App\Http\Controllers\Api\ProdiAccountController;
 use App\Http\Controllers\Api\ProdiController;
+use App\Http\Controllers\Api\UnitAccountController;
 use App\Http\Controllers\Api\UnitKerjaController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -97,6 +98,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // Manajemen Master Data Unit Kerja (Khusus Admin)
         Route::apiResource('/unit-kerja', UnitKerjaController::class);
 
+        // Manajemen Akun Operator Unit Kerja (Khusus Admin)
+        Route::get('/unit/akun', [UnitAccountController::class, 'index'])->name('api.unit.akun');
+        Route::get('/akun-unit', [UnitAccountController::class, 'index'])->name('api.akun-unit.index');
+        Route::post('/akun-unit', [UnitAccountController::class, 'store'])->name('api.akun-unit.store');
+        Route::put('/akun-unit/{id}', [UnitAccountController::class, 'update'])->name('api.akun-unit.update');
+        Route::patch('/akun-unit/{id}/toggle-status', [UnitAccountController::class, 'toggleStatus'])->name('api.akun-unit.toggle-status');
+        Route::delete('/akun-unit/{id}', [UnitAccountController::class, 'destroy'])->name('api.akun-unit.destroy');
+
         // Validasi Dokumen Pelaporan (Khusus Admin)
         Route::post('/dokumen/{id}/validasi', [DokumenPelaporanController::class, 'validasi'])->name('api.dokumen.validasi');
 
@@ -115,8 +124,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/laporan-kinerja', [LaporanKinerjaController::class, 'store'])->name('api.laporan-kinerja.store');
         Route::get('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'show'])->whereNumber('id')->name('api.laporan-kinerja.show');
         Route::get('/laporan-kinerja/{id}/pdf', [LaporanKinerjaController::class, 'cetakPdf'])->whereNumber('id')->name('api.laporan-kinerja.pdf');
-        Route::put('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.update');
-        Route::patch('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.patch');
+        Route::match(['put', 'patch', 'post'], '/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'update'])->whereNumber('id')->name('api.laporan-kinerja.update');
         Route::delete('/laporan-kinerja/{id}', [LaporanKinerjaController::class, 'destroy'])->whereNumber('id')->name('api.laporan-kinerja.destroy');
     });
 

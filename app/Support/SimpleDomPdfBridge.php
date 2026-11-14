@@ -82,13 +82,105 @@ class SimpleDomPdfBridge
         return str_replace(['\\', '(', ')', "\r"], ['\\\\', '\\(', '\\)', ''], $clean);
     }
 
+    /**
+     * Mengonversi gambar TTD (Base64 Data URI atau file storage) menjadi stream PDF 1.4 XObject
+     * (DeviceRGB + FlateDecode) dengan background putih agar bebas isu transparansi.
+     *
+     * @return array{width:int, height:int, data:string}|null
+     */
+    protected function buildSignatureXObject($laporan): ?array
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            return null;
+        }
+
+        $binary = null;
+
+        // 1. Cek dari data ttdBase64 (data:image/...;base64,...)
+        $ttdBase64 = $this->data['ttdBase64'] ?? null;
+        if (is_string($ttdBase64) && str_contains($ttdBase64, ';base64,')) {
+            $raw     = substr($ttdBase64, strpos($ttdBase64, ',') + 1);
+            $decoded = base64_decode($raw, true);
+            if ($decoded !== false && $decoded !== '') {
+                $binary = $decoded;
+            }
+        }
+
+        // 2. Fallback baca langsung dari storage apabila ttdBase64 belum disiapkan
+        if ($binary === null && ! empty($laporan?->ttd_image_path)) {
+            $storagePath = storage_path('app/public/' . $laporan->ttd_image_path);
+            $publicPath  = public_path('storage/' . $laporan->ttd_image_path);
+            $filePath    = file_exists($storagePath) ? $storagePath : (file_exists($publicPath) ? $publicPath : null);
+
+            if ($filePath && is_readable($filePath)) {
+                $content = @file_get_contents($filePath);
+                if ($content !== false && $content !== '') {
+                    $binary = $content;
+                }
+            }
+        }
+
+        if ($binary === null) {
+            return null;
+        }
+
+        $src = @imagecreatefromstring($binary);
+        if (! $src) {
+            return null;
+        }
+
+        $origW = imagesx($src);
+        $origH = imagesy($src);
+        if ($origW <= 0 || $origH <= 0) {
+            imagedestroy($src);
+            return null;
+        }
+
+        // Resize proporsional (maks 420x160 px) agar tajam namun ukuran PDF tetap ringan
+        $maxW  = 420;
+        $maxH  = 160;
+        $scale = min($maxW / $origW, $maxH / $origH, 1.0);
+        $dstW  = max(1, (int) round($origW * $scale));
+        $dstH  = max(1, (int) round($origH * $scale));
+
+        $dst   = imagecreatetruecolor($dstW, $dstH);
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefill($dst, 0, 0, $white);
+        imagealphablending($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $dstW, $dstH, $origW, $origH);
+        imagedestroy($src);
+
+        // Ekstrak raw RGB bytes (top-to-bottom, left-to-right)
+        $rgb = '';
+        for ($py = 0; $py < $dstH; $py++) {
+            for ($px = 0; $px < $dstW; $px++) {
+                $color = imagecolorat($dst, $px, $py);
+                $rgb .= chr(($color >> 16) & 0xFF)
+                    . chr(($color >> 8) & 0xFF)
+                    . chr($color & 0xFF);
+            }
+        }
+        imagedestroy($dst);
+
+        $compressed = function_exists('gzcompress') ? gzcompress($rgb, 6) : false;
+        if ($compressed === false) {
+            return null;
+        }
+
+        return [
+            'width'  => $dstW,
+            'height' => $dstH,
+            'data'   => $compressed,
+        ];
+    }
+
     protected function buildValidPdfBinary(): string
     {
         $laporan      = $this->data['laporan'] ?? null;
         $tanggalCetak = $this->data['tanggalCetak'] ?? date('d F Y');
 
         $namaUnit          = (string) ($laporan?->unitKerja?->nama_unit ?? '-');
-        $kategoriUnit      = strtoupper((string) ($laporan?->unitKerja?->kategoriUnit?->nama_kategori ?? $laporan?->unitKerja?->kategori_unit ?? 'UNIT'));
+        $kategoriUnit      = strtoupper((string) ($laporan?->unitKerja?->kategori?->nama_kategori ?? $laporan?->unitKerja?->kategoriUnit?->nama_kategori ?? $laporan?->unitKerja?->kategori_unit ?? 'UNIT'));
         $namaPeriode       = (string) ($laporan?->periodeAkademik?->nama_periode ?? '-');
         $bulanLaporan      = (string) ($laporan?->bulan_laporan ?? '');
         $namaKegiatan      = (string) ($laporan?->nama_kegiatan ?? '-');
@@ -206,6 +298,19 @@ class SimpleDomPdfBridge
         $drawText(355, $ttdY, 'OKU Timur, ' . $tanggalCetak, 'F1', 10);
         $drawText(355, $ttdY - 14, 'Penanggung Jawab / Penandatangan,', 'F1', 10);
         $drawText(355, $ttdY - 28, substr($namaUnit, 0, 36), 'F2', 10);
+
+        $sigImage = $this->buildSignatureXObject($laporan);
+        if ($sigImage !== null) {
+            $maxBoxW = 135.0;
+            $maxBoxH = 44.0;
+            $ratio   = min($maxBoxW / $sigImage['width'], $maxBoxH / $sigImage['height']);
+            $drawW   = round($sigImage['width'] * $ratio, 2);
+            $drawH   = round($sigImage['height'] * $ratio, 2);
+            $imgX    = 355.0;
+            $imgY    = round(($ttdY - 76) + (($maxBoxH - $drawH) / 2), 2);
+            $ops[]   = "q {$drawW} 0 0 {$drawH} {$imgX} {$imgY} cm /Im1 Do Q";
+        }
+
         $drawText(355, $ttdY - 82, $namaPenandatangan, 'F2', 10);
         $drawLine(355, $ttdY - 84, 520, $ttdY - 84, 0.8);
 
@@ -213,18 +318,24 @@ class SimpleDomPdfBridge
         $drawLine(55, 48, 540, 48, 0.4);
         $drawText(55, 36, 'Dokumen resmi SIPASTI Universitas Nurul Huda - Dicetak otomatis pada ' . date('d/m/Y H:i') . ' WIB', 'F3', 8);
 
-        $streamContent = implode("\n", $ops);
-        $streamLength  = strlen($streamContent);
+        $streamContent   = implode("\n", $ops);
+        $streamLength    = strlen($streamContent);
+        $xObjectResource = $sigImage !== null ? ' /XObject << /Im1 8 0 R >>' : '';
 
         // Rakit objek PDF 1.4 standar dengan tabel xref presisi
         $objects = [];
         $objects[1] = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
         $objects[2] = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
-        $objects[3] = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> >> /Contents 7 0 R >>\nendobj\n";
+        $objects[3] = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >>{$xObjectResource} >> /Contents 7 0 R >>\nendobj\n";
         $objects[4] = "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>\nendobj\n";
         $objects[5] = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>\nendobj\n";
         $objects[6] = "6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >>\nendobj\n";
         $objects[7] = "7 0 obj\n<< /Length {$streamLength} >>\nstream\n{$streamContent}\nendstream\nendobj\n";
+
+        if ($sigImage !== null) {
+            $imgLen     = strlen($sigImage['data']);
+            $objects[8] = "8 0 obj\n<< /Type /XObject /Subtype /Image /Width {$sigImage['width']} /Height {$sigImage['height']} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {$imgLen} >>\nstream\n{$sigImage['data']}\nendstream\nendobj\n";
+        }
 
         $pdf     = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
         $offsets = [];

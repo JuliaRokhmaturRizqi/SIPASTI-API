@@ -32,7 +32,7 @@ class LaporanKinerjaExport implements FromCollection, WithHeadings, WithMapping,
         $query = LaporanKinerja::query()
             ->with([
                 'unitKerja:id,nama_unit,id_kategori',
-                'unitKerja.kategoriUnit:id,nama_kategori',
+                'unitKerja.kategori:id,nama_kategori',
                 'periodeAkademik:id,nama_periode',
             ]);
 
@@ -42,7 +42,7 @@ class LaporanKinerjaExport implements FromCollection, WithHeadings, WithMapping,
 
         if (! empty($this->kategoriUnit)) {
             $kategori = $this->kategoriUnit;
-            $query->whereHas('unitKerja.kategoriUnit', function ($q) use ($kategori) {
+            $query->whereHas('unitKerja.kategori', function ($q) use ($kategori) {
                 $q->where('nama_kategori', 'like', "%{$kategori}%");
             });
         }
@@ -79,7 +79,8 @@ class LaporanKinerjaExport implements FromCollection, WithHeadings, WithMapping,
     {
         $this->rowNumber++;
 
-        $kategori = $laporan->unitKerja?->kategoriUnit?->nama_kategori
+        $kategori = $laporan->unitKerja?->kategori?->nama_kategori
+            ?? $laporan->unitKerja?->kategoriUnit?->nama_kategori
             ?? $laporan->unitKerja?->kategori_unit
             ?? '-';
 
