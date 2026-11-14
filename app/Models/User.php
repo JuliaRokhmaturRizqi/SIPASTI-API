@@ -17,6 +17,13 @@ class User extends Authenticatable
     public const DEFAULT_OPERATOR_PASSWORD = 'Unuha2026!';
     public const DEFAULT_PRODI_PASSWORD    = 'Unuha2026!';
 
+    public const JABATAN_STAF     = 'staf';
+    public const JABATAN_PIMPINAN = 'pimpinan';
+    public const JABATAN_LIST     = [
+        self::JABATAN_STAF,
+        self::JABATAN_PIMPINAN,
+    ];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -26,6 +33,7 @@ class User extends Authenticatable
         'username',
         'password',
         'role',
+        'jabatan',
         'id_fakultas',
         'id_unit_kerja',
         'id_prodi',
@@ -57,6 +65,7 @@ class User extends Authenticatable
      */
     protected $attributes = [
         'is_active' => true,
+        'jabatan'   => self::JABATAN_STAF,
     ];
 
     /**
@@ -123,5 +132,15 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function isPimpinan(): bool
+    {
+        return $this->jabatan === self::JABATAN_PIMPINAN;
+    }
+
+    public function isStaf(): bool
+    {
+        return $this->jabatan === self::JABATAN_STAF;
     }
 }
