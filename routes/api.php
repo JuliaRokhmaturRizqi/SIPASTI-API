@@ -33,7 +33,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', function (Request $request) {
         return response()->json([
             'status' => 'success',
-            'data'   => $request->user()->load(['fakultas.prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif']),
+            'data'   => $request->user()->load([
+                'fakultas.prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif',
+                'unitKerja.kategori:id,nama_kategori',
+            ]),
         ]);
     });
 
@@ -48,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Daftar Periode Akademik, Fakultas, dan Program Studi (Dapat dibaca oleh Admin maupun Operator Fakultas)
     Route::get('/periode', [PeriodeController::class, 'index'])->name('api.periode.index');
+    Route::get('/periode-akademik', [PeriodeController::class, 'index'])->name('api.periode-akademik.index');
     Route::get('/fakultas', [FakultasController::class, 'index'])->name('api.fakultas.index');
     Route::get('/prodi', [ProdiController::class, 'index'])->name('api.prodi.index');
     Route::get('/prodi/{id}', [ProdiController::class, 'show'])->name('api.prodi.show');

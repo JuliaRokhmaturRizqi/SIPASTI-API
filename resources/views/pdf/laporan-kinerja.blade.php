@@ -2,205 +2,279 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Laporan Kinerja - {{ $laporan->unitKerja->nama_unit ?? 'Unit Kerja' }}</title>
+    <title>Format Laporan Pembahasan Kendala Dukungan Tindak Lanjut - {{ $laporan->unitKerja->nama_unit ?? 'Unit Kerja' }}</title>
     <style>
         @page {
-            margin: 1.8cm 1.8cm 1.8cm 2cm;
+            margin: 1.8cm 1.8cm 2.2cm 1.8cm;
         }
+
         body {
-            font-family: "Times New Roman", Times, Arial, serif;
-            font-size: 10.5pt;
-            line-height: 1.4;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            line-height: 1.38;
             color: #111111;
             margin: 0;
             padding: 0;
         }
 
-        /* Kop Surat Resmi Kampus */
-        .kop-surat {
+        /* Judul Utama di Bagian Paling Atas (Tengah) */
+        .doc-header-table {
             width: 100%;
-            border-bottom: 3px solid #000000;
-            padding-bottom: 6px;
-            margin-bottom: 2px;
-            text-align: center;
-        }
-        .kop-garis-tipis {
-            border-bottom: 1px solid #000000;
+            border-collapse: collapse;
             margin-bottom: 14px;
+            page-break-inside: avoid;
         }
-        .kop-yayasan {
-            font-size: 10.5pt;
-            font-weight: bold;
-            letter-spacing: 0.4px;
-            text-transform: uppercase;
-            margin: 0;
+        .doc-header-table td {
+            text-align: center;
+            border: none;
+            padding: 0;
         }
-        .kop-universitas {
-            font-size: 15pt;
-            font-weight: bold;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-            margin: 2px 0;
-            color: #0b4d26;
-        }
-        .kop-sistem {
-            font-size: 9.5pt;
+        .doc-main-title {
+            font-size: 12pt;
             font-weight: bold;
             text-transform: uppercase;
-            margin: 2px 0;
+            letter-spacing: 0.3px;
+            color: #111111;
+            margin: 0 0 6px 0;
         }
-        .kop-alamat {
-            font-size: 8.5pt;
-            font-style: italic;
-            color: #333333;
-            margin: 2px 0 0 0;
+        .doc-title-rule {
+            border-bottom: 2px solid #2F4F4F;
+            height: 2px;
+            width: 100%;
         }
 
-        /* Judul Dokumen */
-        .judul-dokumen {
-            text-align: center;
-            margin-bottom: 14px;
-        }
-        .judul-dokumen h2 {
-            font-size: 12.5pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            text-decoration: underline;
-            margin: 0 0 3px 0;
-        }
-        .judul-dokumen p {
-            font-size: 9.5pt;
-            margin: 0;
-            color: #333333;
-        }
-
-        /* Heading Bagian (A, C, D, E, F, G, H) */
-        .section-title {
-            font-size: 10.5pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            background-color: #e8efe9;
-            border: 1px solid #222222;
-            padding: 5px 8px;
+        /* Blok Bagian (Wrapper agar judul & konten tidak mudah terpisah) */
+        .section-block {
             margin-top: 12px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
 
-        /* Tabel Identitas */
+        /* Sub-Judul Bagian (A, B, C, D, E, F, G, H) */
+        .section-heading {
+            font-size: 10.5pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #111111;
+            margin: 0 0 3px 0;
+            padding: 0;
+            page-break-after: avoid;
+        }
+
+        /* Deskripsi Sub-Judul */
+        .section-desc {
+            font-size: 9.5pt;
+            color: #333333;
+            margin: 0 0 6px 0;
+            padding: 0;
+            page-break-after: avoid;
+        }
+
+        /* Semua Tabel Umum (DOMPDF Strict) */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-inside: avoid;
+        }
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+        thead {
+            display: table-header-group;
+        }
+
+        /* A. Tabel Identitas Laporan (2 Kolom Statis) */
         .table-identitas {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            page-break-inside: avoid;
         }
         .table-identitas td {
-            border: 1px solid #222222;
+            border: 1px solid #333333;
             padding: 5px 8px;
             vertical-align: top;
             font-size: 10pt;
         }
-        .table-identitas td.label {
-            width: 28%;
+        .table-identitas td.col-label {
+            width: 30%;
             font-weight: bold;
-            background-color: #f7f9f7;
+            background-color: #F4F6F5;
+            color: #111111;
         }
-        .table-identitas td.value {
-            width: 72%;
+        .table-identitas td.col-value {
+            width: 70%;
+            color: #111111;
         }
 
-        /* Tabel Data Dinamis */
-        .table-data {
+        /* B. Tabel Kotak Ringkasan Pelaksanaan */
+        .table-ringkasan {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            page-break-inside: avoid;
         }
-        .table-data th,
-        .table-data td {
-            border: 1px solid #222222;
-            padding: 5px 7px;
+        .table-ringkasan td {
+            border: 1px solid #333333;
+            padding: 7px 9px;
+            vertical-align: top;
+            font-size: 10pt;
+            min-height: 45px;
+            white-space: pre-line;
+        }
+
+        /* C, D, E, F. Tabel Data Dinamis dengan Header Hijau Gelap & Teks Putih */
+        .table-matrix {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+            page-break-inside: avoid;
+        }
+        .table-matrix th {
+            background-color: #2F4F4F;
+            color: #FFFFFF;
+            font-weight: bold;
+            font-size: 9.5pt;
+            text-align: center;
+            vertical-align: middle;
+            border: 1px solid #2F4F4F;
+            padding: 6px 6px;
+        }
+        .table-matrix td {
+            border: 1px solid #333333;
+            padding: 5px 6px;
             vertical-align: top;
             text-align: left;
             font-size: 9.5pt;
             word-wrap: break-word;
+            color: #111111;
         }
-        .table-data th {
-            background-color: #f0f4f1;
-            font-weight: bold;
-            text-align: center;
-        }
-        .table-data td.col-no {
+        .table-matrix td.col-no {
             width: 5%;
             text-align: center;
         }
-        .link-text {
-            color: #0b5394;
+        .link-bukti {
+            color: #0B5394;
             text-decoration: underline;
             word-break: break-all;
         }
 
-        /* Kotak Kesimpulan & Rekomendasi */
-        .box-narasi {
+        /* Catatan Kecil di Bawah Tabel C */
+        .note-small {
+            font-size: 8.5pt;
+            font-style: italic;
+            color: #444444;
+            margin: 2px 0 6px 0;
+        }
+
+        /* G. Tabel Statis 2 Baris Kesimpulan & Rekomendasi */
+        .table-kesimpulan {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            page-break-inside: avoid;
         }
-        .box-narasi th,
-        .box-narasi td {
-            border: 1px solid #222222;
+        .table-kesimpulan td {
+            border: 1px solid #333333;
             padding: 6px 8px;
+            vertical-align: top;
+            font-size: 10pt;
+        }
+        .table-kesimpulan td.col-label {
+            width: 25%;
+            font-weight: bold;
+            background-color: #F4F6F5;
+            color: #111111;
+        }
+        .table-kesimpulan td.col-value {
+            width: 75%;
+            white-space: pre-line;
+            color: #111111;
+        }
+
+        /* H. Tabel Pengesahan Tanpa Border (Split 2 Kolom Kiri - Kanan) */
+        .pengesahan-intro {
+            font-size: 10pt;
+            margin: 0 0 8px 0;
+            color: #111111;
+        }
+        .table-pengesahan {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+        .table-pengesahan td {
+            width: 50%;
+            border: none;
+            padding: 4px 12px;
             vertical-align: top;
             text-align: left;
             font-size: 10pt;
         }
-        .box-narasi th {
-            width: 25%;
-            background-color: #f7f9f7;
+        .ttd-heading {
+            margin: 0 0 2px 0;
+        }
+        .ttd-role {
             font-weight: bold;
+            margin: 0 0 6px 0;
         }
-        .box-narasi td {
-            width: 75%;
-            white-space: pre-line;
-        }
-
-        /* Tabel Pengesahan (Split Kiri - Kanan) */
-        .table-pengesahan {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-        }
-        .table-pengesahan td {
-            width: 50%;
-            vertical-align: top;
-            text-align: center;
-            padding: 6px 10px;
-            font-size: 10pt;
-            border: none;
-        }
-        .ttd-space {
+        .ttd-box {
             height: 65px;
-        }
-        .ttd-img-wrapper {
-            height: 65px;
-            margin: 4px auto;
-            text-align: center;
+            margin: 4px 0;
         }
         .ttd-img {
             max-height: 60px;
-            max-width: 165px;
+            max-width: 170px;
         }
-        .ttd-nama {
+        .ttd-name {
             font-weight: bold;
             text-decoration: underline;
-            margin-top: 4px;
+            margin: 4px 0 2px 0;
+        }
+        .ttd-date {
+            font-size: 9.5pt;
+            margin: 0;
+            color: #222222;
         }
 
-        /* Footer */
-        .catatan-kaki {
-            margin-top: 20px;
-            border-top: 1px dashed #888888;
-            padding-top: 5px;
-            font-size: 8pt;
-            color: #555555;
+        /* Petunjuk Bagian Paling Bawah */
+        .petunjuk-bottom {
+            margin-top: 8px;
+            padding: 6px 8px;
+            background-color: #F4F6F5;
+            border-left: 3px solid #2F4F4F;
+            font-size: 8.5pt;
             font-style: italic;
+            color: #333333;
+            page-break-inside: avoid;
+        }
+
+        /* Footer Halaman (Kiri: Teks, Kanan: Nomor Halaman) */
+        .page-footer {
+            position: fixed;
+            bottom: -1.3cm;
+            left: 0;
+            right: 0;
+            height: 0.9cm;
+            border-top: 1px solid #888888;
+            padding-top: 4px;
+            font-size: 8.5pt;
+            color: #444444;
+        }
+        .page-footer-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .page-footer-table td {
+            border: none;
+            padding: 0;
+            font-size: 8.5pt;
+            color: #444444;
+        }
+        .page-number:before {
+            content: "Halaman " counter(page);
         }
     </style>
 </head>
@@ -227,229 +301,396 @@
             ? $laporan->tindak_lanjut_json
             : (is_string($laporan->tindak_lanjut_json) ? (json_decode($laporan->tindak_lanjut_json, true) ?? []) : []);
 
-        $kategoriNama    = $laporan->unitKerja->kategori->nama_kategori ?? $laporan->unitKerja->kategori_unit ?? 'UNIT';
-        $namaUnit        = $laporan->unitKerja->nama_unit ?? ($identitas['nama_unit'] ?? '-');
-        $namaPeriode     = $laporan->periodeAkademik->nama_periode ?? ($identitas['periode'] ?? '-');
-        $bulanLaporan    = $laporan->bulan_laporan ?? ($identitas['bulan'] ?? '-');
-        $penanggungJawab = $identitas['penanggung_jawab'] ?? ($identitas['kepala_unit'] ?? ($laporan->nama_penandatangan ?? '-'));
-        $namaPenyusun    = $identitas['penyusun'] ?? ($identitas['nama_penyusun'] ?? '-');
+        // Data Identitas Laporan
+        $namaUnit = $identitas['nama_unit']
+            ?? ($identitas['unit_bagian']
+            ?? ($laporan->unitKerja->nama_unit ?? '-'));
+
+        $namaKegiatan = $identitas['nama_kegiatan']
+            ?? ($identitas['nama_program']
+            ?? ($identitas['kegiatan']
+            ?? ($laporan->nama_kegiatan
+            ?? ($pembahasanList[0]['program_kerja'] ?? ($pembahasanList[0]['aspek'] ?? '-')))));
+
+        $namaPeriode = $identitas['periode_laporan']
+            ?? ($identitas['periode']
+            ?? ($laporan->periodeAkademik->nama_periode ?? '-'));
+        $bulanLaporan = $laporan->bulan_laporan ?? ($identitas['bulan'] ?? null);
+        $periodeTampil = $bulanLaporan && !str_contains(strtolower($namaPeriode), strtolower($bulanLaporan))
+            ? $bulanLaporan . ' (' . $namaPeriode . ')'
+            : $namaPeriode;
+
+        $tanggalPenyusunan = $identitas['tanggal_penyusunan']
+            ?? ($identitas['tanggal']
+            ?? ($tanggalCetak ?? ($laporan->created_at ? $laporan->created_at->format('d/m/Y') : date('d/m/Y'))));
+
+        $penanggungJawab = $identitas['penanggung_jawab']
+            ?? ($identitas['kepala_unit']
+            ?? ($identitas['nama_pimpinan']
+            ?? ($laporan->nama_penandatangan ?? '-')));
+
+        $penyusunLaporan = $identitas['penyusun_laporan']
+            ?? ($identitas['penyusun']
+            ?? ($identitas['nama_penyusun'] ?? '-'));
+
+        // Ringkasan Pelaksanaan (Bagian B)
+        $ringkasanPelaksanaan = $identitas['ringkasan_pelaksanaan']
+            ?? ($identitas['ringkasan']
+            ?? ($laporan->uraian
+            ?? ($pembahasanList[0]['uraian'] ?? '-')));
+
+        // Tanggal Pengesahan
+        $tanggalPengesahanPimpinan = $identitas['tanggal_pengesahan_pimpinan']
+            ?? ($identitas['tanggal_pimpinan']
+            ?? ($laporan->status_laporan === 'menunggu_admin' || $laporan->status_laporan === 'selesai'
+                ? ($laporan->updated_at ? $laporan->updated_at->format('d/m/Y') : $tanggalPenyusunan)
+                : '........................................'));
+
+        $tanggalPengesahanPenyusun = $identitas['tanggal_pengesahan_penyusun']
+            ?? ($identitas['tanggal_penyusun']
+            ?? $tanggalPenyusunan);
     @endphp
 
-    <!-- KOP SURAT RESMI -->
-    <div class="kop-surat">
-        <p class="kop-yayasan">Yayasan Pondok Pesantren Nurul Huda Sukaraja</p>
-        <p class="kop-universitas">Universitas Nurul Huda (UNUHA)</p>
-        <p class="kop-sistem">Sistem Informasi Pelaporan Akademik &amp; Kinerja Terpadu (SIPASTI)</p>
-        <p class="kop-alamat">Jl. Kotabaru Sukaraja, Buay Madang, OKU Timur, Sumatera Selatan 32161 | Website: www.unuha.ac.id</p>
+    <!-- FOOTER TETAP (KIRI: NAMA FORMAT, KANAN: NOMOR HALAMAN) -->
+    <div class="page-footer">
+        <table class="page-footer-table">
+            <tr>
+                <td style="text-align: left; width: 70%;">Format Laporan Evaluasi dan Tindak Lanjut</td>
+                <td style="text-align: right; width: 30%;"><span class="page-number"></span></td>
+            </tr>
+        </table>
     </div>
-    <div class="kop-garis-tipis"></div>
 
-    <!-- JUDUL DOKUMEN -->
-    <div class="judul-dokumen">
-        <h2>Laporan Kinerja Unit Kerja</h2>
-        <p>Nomor Dokumen: LK/{{ strtoupper($kategoriNama) }}/{{ $laporan->id }}/{{ date('Y') }}</p>
-    </div>
+    <!-- JUDUL ATAS -->
+    <table class="doc-header-table">
+        <tr>
+            <td>
+                <div class="doc-main-title">FORMAT LAPORAN PEMBAHASAN KENDALA DUKUNGAN TINDAK LANJUT</div>
+                <div class="doc-title-rule"></div>
+            </td>
+        </tr>
+    </table>
 
     <!-- A. IDENTITAS LAPORAN -->
-    <div class="section-title">A. Identitas Laporan</div>
-    <table class="table-identitas">
-        <tr>
-            <td class="label">Nama Unit Kerja</td>
-            <td class="value"><strong>{{ $namaUnit }}</strong></td>
-        </tr>
-        <tr>
-            <td class="label">Periode Pelaporan</td>
-            <td class="value">{{ $namaPeriode }}</td>
-        </tr>
-        <tr>
-            <td class="label">Bulan</td>
-            <td class="value">{{ $bulanLaporan }}</td>
-        </tr>
-        <tr>
-            <td class="label">Penanggung Jawab</td>
-            <td class="value">{{ $penanggungJawab }}</td>
-        </tr>
-        <tr>
-            <td class="label">Penyusun</td>
-            <td class="value">{{ $namaPenyusun }}</td>
-        </tr>
-    </table>
+    <div class="section-block">
+        <div class="section-heading">A. IDENTITAS LAPORAN</div>
+        <table class="table-identitas">
+            <tr>
+                <td class="col-label">Nama unit/bagian</td>
+                <td class="col-value">{{ $namaUnit }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Nama kegiatan/program</td>
+                <td class="col-value">{{ $namaKegiatan }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Periode laporan</td>
+                <td class="col-value">{{ $periodeTampil }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Tanggal penyusunan</td>
+                <td class="col-value">{{ $tanggalPenyusunan }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Penanggung jawab</td>
+                <td class="col-value">{{ $penanggungJawab }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Penyusun laporan</td>
+                <td class="col-value">{{ $penyusunLaporan }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- B. RINGKASAN PELAKSANAAN -->
+    <div class="section-block">
+        <div class="section-heading">B. RINGKASAN PELAKSANAAN</div>
+        <div class="section-desc">Gambaran singkat tujuan, waktu dan tempat, pihak yang terlibat, serta capaian utama.</div>
+        <table class="table-ringkasan">
+            <tr>
+                <td>{{ $ringkasanPelaksanaan ?: '-' }}</td>
+            </tr>
+        </table>
+    </div>
 
     <!-- C. PEMBAHASAN LAPORAN -->
-    <div class="section-title">C. Pembahasan Laporan</div>
-    <table class="table-data">
-        <thead>
-            <tr>
-                <th style="width: 5%;">No</th>
-                <th style="width: 25%;">Aspek / Indikator</th>
-                <th style="width: 22%;">Realisasi</th>
-                <th style="width: 28%;">Analisis</th>
-                <th style="width: 20%;">Link Bukti</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($pembahasanList as $index => $item)
+    <div class="section-block">
+        <div class="section-heading">C. PEMBAHASAN LAPORAN</div>
+        <div class="section-desc">Uraikan realisasi kegiatan berdasarkan rencana, indikator capaian, hasil yang diperoleh, analisis pelaksanaan, serta tautan bukti dukung.</div>
+        <table class="table-matrix">
+            <thead>
                 <tr>
-                    <td class="col-no">{{ $index + 1 }}</td>
-                    <td>{{ $item['aspek'] ?? ($item['indikator'] ?? ($item['aspek_indikator'] ?? '-')) }}</td>
-                    <td>{{ $item['realisasi'] ?? '-' }}</td>
-                    <td>{{ $item['analisis'] ?? '-' }}</td>
-                    <td>
-                        @if(!empty($item['link_bukti']))
-                            <span class="link-text">{{ $item['link_bukti'] }}</span>
-                        @else
-                            -
-                        @endif
-                    </td>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 23%;">Aspek/indikator</th>
+                    <th style="width: 25%;">Realisasi dan hasil</th>
+                    <th style="width: 25%;">Analisis/catatan</th>
+                    <th style="width: 22%;">Link bukti dukung (laporan/dokumen)</th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="5" style="text-align: center;">{{ $laporan->uraian ?? 'Tidak ada data pembahasan.' }}</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @forelse($pembahasanList as $index => $item)
+                    @php
+                        $aspek = $item['aspek_indikator']
+                            ?? ($item['aspek']
+                            ?? ($item['indikator']
+                            ?? ($item['program_kerja'] ?? '-')));
+
+                        $realisasi = $item['realisasi_dan_hasil']
+                            ?? ($item['realisasi']
+                            ?? ($item['capaian']
+                            ?? ($item['uraian'] ?? '-')));
+
+                        $analisis = $item['analisis_catatan']
+                            ?? ($item['analisis']
+                            ?? ($item['catatan']
+                            ?? ($item['status'] ?? '-')));
+
+                        $bukti = $item['link_bukti']
+                            ?? ($item['bukti']
+                            ?? ($item['tautan'] ?? null));
+                    @endphp
+                    <tr>
+                        <td class="col-no">{{ $index + 1 }}</td>
+                        <td>{{ $aspek }}</td>
+                        <td>{{ $realisasi }}</td>
+                        <td>{{ $analisis }}</td>
+                        <td>
+                            @if(!empty($bukti))
+                                <span class="link-bukti">{{ $bukti }}</span>
+                            @else
+                                -
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="col-no">1</td>
+                        <td>{{ $laporan->nama_kegiatan ?? '-' }}</td>
+                        <td>{{ $laporan->uraian ?? '-' }}</td>
+                        <td>-</td>
+                        <td>
+                            @if(!empty($laporan->link_bukti))
+                                <span class="link-bukti">{{ $laporan->link_bukti }}</span>
+                            @else
+                                -
+                            @endif
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+        <div class="note-small">Catatan: tautan dapat berupa URL Google Drive, OneDrive, situs resmi, atau penyimpanan dokumen internal.</div>
+    </div>
 
     <!-- D. KENDALA DAN PERMASALAHAN -->
-    <div class="section-title">D. Kendala dan Permasalahan</div>
-    <table class="table-data">
-        <thead>
-            <tr>
-                <th style="width: 5%;">No</th>
-                <th style="width: 25%;">Kendala</th>
-                <th style="width: 23%;">Penyebab</th>
-                <th style="width: 23%;">Dampak</th>
-                <th style="width: 24%;">Upaya</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($kendalaList as $index => $item)
+    <div class="section-block">
+        <div class="section-heading">D. KENDALA DAN PERMASALAHAN</div>
+        <div class="section-desc">Catat kendala, penyebab utama, dampak terhadap pelaksanaan kegiatan, serta upaya sementara yang telah dilakukan.</div>
+        <table class="table-matrix">
+            <thead>
                 <tr>
-                    <td class="col-no">{{ $index + 1 }}</td>
-                    <td>{{ $item['kendala'] ?? '-' }}</td>
-                    <td>{{ $item['penyebab'] ?? '-' }}</td>
-                    <td>{{ $item['dampak'] ?? '-' }}</td>
-                    <td>{{ $item['upaya'] ?? ($item['solusi'] ?? '-') }}</td>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 25%;">Kendala/permasalahan</th>
+                    <th style="width: 23%;">Penyebab</th>
+                    <th style="width: 23%;">Dampak</th>
+                    <th style="width: 24%;">Upaya sementara</th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="5" style="text-align: center;">{{ $laporan->kendala ?? 'Tidak ada kendala yang dilaporkan.' }}</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @forelse($kendalaList as $index => $item)
+                    @php
+                        $kendalaItem = $item['kendala_permasalahan']
+                            ?? ($item['kendala']
+                            ?? ($item['uraian']
+                            ?? ($item['kategori'] ?? '-')));
+
+                        $penyebabItem = $item['penyebab'] ?? '-';
+                        $dampakItem   = $item['dampak'] ?? '-';
+                        $upayaItem    = $item['upaya_sementara']
+                            ?? ($item['upaya']
+                            ?? ($item['solusi'] ?? '-'));
+                    @endphp
+                    <tr>
+                        <td class="col-no">{{ $index + 1 }}</td>
+                        <td>{{ $kendalaItem }}</td>
+                        <td>{{ $penyebabItem }}</td>
+                        <td>{{ $dampakItem }}</td>
+                        <td>{{ $upayaItem }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="col-no">1</td>
+                        <td>{{ $laporan->kendala ?? '-' }}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
     <!-- E. DUKUNGAN YANG DIBUTUHKAN -->
-    <div class="section-title">E. Dukungan yang Dibutuhkan</div>
-    <table class="table-data">
-        <thead>
-            <tr>
-                <th style="width: 5%;">No</th>
-                <th style="width: 35%;">Jenis Dukungan</th>
-                <th style="width: 35%;">Bentuk</th>
-                <th style="width: 25%;">Pihak</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($dukunganList as $index => $item)
+    <div class="section-block">
+        <div class="section-heading">E. DUKUNGAN YANG DIBUTUHKAN</div>
+        <div class="section-desc">Jelaskan dukungan yang diperlukan, bentuk kebutuhan spesifik, pihak yang diharapkan membantu, dan tingkat prioritasnya.</div>
+        <table class="table-matrix">
+            <thead>
                 <tr>
-                    <td class="col-no">{{ $index + 1 }}</td>
-                    <td>{{ $item['jenis_dukungan'] ?? ($item['jenis'] ?? '-') }}</td>
-                    <td>{{ $item['bentuk'] ?? ($item['bentuk_dukungan'] ?? '-') }}</td>
-                    <td>{{ $item['pihak'] ?? ($item['pemberi'] ?? '-') }}</td>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 23%;">Jenis dukungan</th>
+                    <th style="width: 30%;">Bentuk/kebutuhan dukungan</th>
+                    <th style="width: 24%;">Pihak yang diharapkan</th>
+                    <th style="width: 18%;">Prioritas</th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="4" style="text-align: center;">{{ $laporan->dukungan ?? 'Tidak ada dukungan khusus yang diajukan.' }}</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @forelse($dukunganList as $index => $item)
+                    @php
+                        $jenisDukungan = $item['jenis_dukungan']
+                            ?? ($item['jenis']
+                            ?? ($item['kategori'] ?? '-'));
+
+                        $bentukDukungan = $item['bentuk_dukungan']
+                            ?? ($item['bentuk']
+                            ?? ($item['kebutuhan'] ?? '-'));
+
+                        $pihakDiharapkan = $item['pihak_yang_diharapkan']
+                            ?? ($item['pihak']
+                            ?? ($item['pemberi']
+                            ?? ($item['alasan'] ?? '-')));
+
+                        $prioritasDukungan = $item['prioritas'] ?? '-';
+                    @endphp
+                    <tr>
+                        <td class="col-no">{{ $index + 1 }}</td>
+                        <td>{{ $jenisDukungan }}</td>
+                        <td>{{ $bentukDukungan }}</td>
+                        <td>{{ $pihakDiharapkan }}</td>
+                        <td style="text-align: center;">{{ $prioritasDukungan }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="col-no">1</td>
+                        <td>{{ $laporan->dukungan ?? '-' }}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td style="text-align: center;">-</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
     <!-- F. RENCANA TINDAK LANJUT -->
-    <div class="section-title">F. Rencana Tindak Lanjut</div>
-    <table class="table-data">
-        <thead>
-            <tr>
-                <th style="width: 5%;">No</th>
-                <th style="width: 30%;">Tindak Lanjut</th>
-                <th style="width: 22%;">Penanggung Jawab</th>
-                <th style="width: 20%;">Target Waktu</th>
-                <th style="width: 23%;">Indikator</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($tindakLanjutList as $index => $item)
+    <div class="section-block">
+        <div class="section-heading">F. RENCANA TINDAK LANJUT</div>
+        <div class="section-desc">Rumuskan tindakan konkret/solusi yang akan ditempuh, penanggung jawab, target waktu penyelesaian, serta indikator keberhasilannya.</div>
+        <table class="table-matrix">
+            <thead>
                 <tr>
-                    <td class="col-no">{{ $index + 1 }}</td>
-                    <td>{{ $item['tindak_lanjut'] ?? ($item['rencana'] ?? '-') }}</td>
-                    <td>{{ $item['penanggung_jawab'] ?? ($item['pic'] ?? '-') }}</td>
-                    <td>{{ $item['target_waktu'] ?? ($item['waktu'] ?? '-') }}</td>
-                    <td>{{ $item['indikator'] ?? ($item['output'] ?? '-') }}</td>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 30%;">Tindak lanjut/solusi</th>
+                    <th style="width: 22%;">Penanggung jawab</th>
+                    <th style="width: 18%;">Target waktu</th>
+                    <th style="width: 25%;">Indikator keberhasilan</th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="5" style="text-align: center;">{{ $laporan->tindak_lanjut ?? 'Tidak ada rencana tindak lanjut.' }}</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @forelse($tindakLanjutList as $index => $item)
+                    @php
+                        $tindakLanjutItem = $item['tindak_lanjut_solusi']
+                            ?? ($item['tindak_lanjut']
+                            ?? ($item['solusi']
+                            ?? ($item['rencana'] ?? '-')));
+
+                        $pjItem = $item['penanggung_jawab']
+                            ?? ($item['pic'] ?? '-');
+
+                        $targetWaktuItem = $item['target_waktu']
+                            ?? ($item['waktu'] ?? '-');
+
+                        $indikatorItem = $item['indikator_keberhasilan']
+                            ?? ($item['indikator']
+                            ?? ($item['output'] ?? '-'));
+                    @endphp
+                    <tr>
+                        <td class="col-no">{{ $index + 1 }}</td>
+                        <td>{{ $tindakLanjutItem }}</td>
+                        <td>{{ $pjItem }}</td>
+                        <td style="text-align: center;">{{ $targetWaktuItem }}</td>
+                        <td>{{ $indikatorItem }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td class="col-no">1</td>
+                        <td>{{ $laporan->tindak_lanjut ?? '-' }}</td>
+                        <td>-</td>
+                        <td style="text-align: center;">-</td>
+                        <td>-</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
     <!-- G. KESIMPULAN DAN REKOMENDASI -->
-    <div class="section-title">G. Kesimpulan dan Rekomendasi</div>
-    <table class="box-narasi">
-        <tr>
-            <th>Kesimpulan</th>
-            <td>{{ $laporan->kesimpulan ?: '-' }}</td>
-        </tr>
-        <tr>
-            <th>Rekomendasi</th>
-            <td>{{ $laporan->rekomendasi ?: '-' }}</td>
-        </tr>
-    </table>
+    <div class="section-block">
+        <div class="section-heading">G. KESIMPULAN DAN REKOMENDASI</div>
+        <table class="table-kesimpulan">
+            <tr>
+                <td class="col-label">Kesimpulan</td>
+                <td class="col-value">{{ $laporan->kesimpulan ?: ($identitas['kesimpulan'] ?? '-') }}</td>
+            </tr>
+            <tr>
+                <td class="col-label">Rekomendasi</td>
+                <td class="col-value">{{ $laporan->rekomendasi ?: ($identitas['rekomendasi'] ?? '-') }}</td>
+            </tr>
+        </table>
+    </div>
 
-    <!-- H. PENGESAHAN (TANDA TANGAN DUA KOLOM: KIRI & KANAN) -->
-    <div class="section-title">H. Pengesahan</div>
-    <table class="table-pengesahan">
-        <tr>
-            <!-- Kolom Kiri: Pimpinan / Kepala Unit -->
-            <td>
-                <p>&nbsp;</p>
-                <p>Mengetahui,</p>
-                <p><strong>Pimpinan / Kepala {{ $namaUnit }}</strong></p>
+    <!-- H. PENGESAHAN -->
+    <div class="section-block">
+        <div class="section-heading">H. PENGESAHAN</div>
+        <p class="pengesahan-intro">Demikian laporan ini disusun sebagai bahan evaluasi dan tindak lanjut pelaksanaan kegiatan.</p>
 
-                @if(!empty($laporan->ttd_pimpinan_path))
-                    <div class="ttd-img-wrapper">
-                        <img src="{{ !empty($ttdPimpinanBase64) ? $ttdPimpinanBase64 : public_path('storage/' . $laporan->ttd_pimpinan_path) }}" alt="TTD Pimpinan" class="ttd-img">
+        <table class="table-pengesahan">
+            <tr>
+                <!-- Kolom Kiri: Mengetahui, Pimpinan/Kepala Unit -->
+                <td>
+                    <p class="ttd-heading">Mengetahui,</p>
+                    <p class="ttd-role">Pimpinan/Kepala Unit</p>
+
+                    <div class="ttd-box">
+                        @if(!empty($laporan->ttd_pimpinan_path))
+                            <img src="{{ !empty($ttdPimpinanBase64) ? $ttdPimpinanBase64 : public_path('storage/' . $laporan->ttd_pimpinan_path) }}" alt="TTD Pimpinan" class="ttd-img">
+                        @endif
                     </div>
-                @else
-                    <div class="ttd-space"></div>
-                @endif
 
-                <p class="ttd-nama">{{ $penanggungJawab }}</p>
-            </td>
+                    <p class="ttd-name">{{ $penanggungJawab !== '-' ? $penanggungJawab : '................................................' }}</p>
+                    <p class="ttd-date">Tanggal: {{ $tanggalPengesahanPimpinan }}</p>
+                </td>
 
-            <!-- Kolom Kanan: Penyusun -->
-            <td>
-                <p>OKU Timur, {{ $tanggalCetak ?? ($laporan->created_at ? $laporan->created_at->format('d F Y') : date('d F Y')) }}</p>
-                <p>Disusun oleh,</p>
-                <p><strong>Penanggung Jawab / Penyusun</strong></p>
+                <!-- Kolom Kanan: Disusun oleh, Penanggung Jawab -->
+                <td>
+                    <p class="ttd-heading">Disusun oleh,</p>
+                    <p class="ttd-role">Penanggung Jawab</p>
 
-                @if(!empty($laporan->ttd_penyusun_path))
-                    <div class="ttd-img-wrapper">
-                        <img src="{{ !empty($ttdPenyusunBase64) ? $ttdPenyusunBase64 : public_path('storage/' . $laporan->ttd_penyusun_path) }}" alt="TTD Penyusun" class="ttd-img">
+                    <div class="ttd-box">
+                        @if(!empty($laporan->ttd_penyusun_path))
+                            <img src="{{ !empty($ttdPenyusunBase64) ? $ttdPenyusunBase64 : public_path('storage/' . $laporan->ttd_penyusun_path) }}" alt="TTD Penyusun" class="ttd-img">
+                        @endif
                     </div>
-                @else
-                    <div class="ttd-space"></div>
-                @endif
 
-                <p class="ttd-nama">{{ $namaPenyusun !== '-' ? $namaPenyusun : $penanggungJawab }}</p>
-            </td>
-        </tr>
-    </table>
+                    <p class="ttd-name">{{ $penyusunLaporan !== '-' ? $penyusunLaporan : ($penanggungJawab !== '-' ? $penanggungJawab : '................................................') }}</p>
+                    <p class="ttd-date">Tanggal: {{ $tanggalPengesahanPenyusun }}</p>
+                </td>
+            </tr>
+        </table>
 
-    <div class="catatan-kaki">
-        Dokumen ini dihasilkan secara otomatis melalui Sistem Informasi Pelaporan Terpadu (SIPASTI) Universitas Nurul Huda pada {{ date('d/m/Y H:i') }} WIB.
+        <div class="petunjuk-bottom">
+            Petunjuk: gunakan data faktual dan terukur, lampirkan tautan bukti dukung yang dapat diakses, serta pastikan laporan telah disahkan sebelum diarsipkan.
+        </div>
     </div>
 
 </body>

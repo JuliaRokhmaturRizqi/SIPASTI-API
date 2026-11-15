@@ -36,10 +36,13 @@ class AuthController extends Controller
             ], 429);
         }
 
-        // Cari user via Eloquent dengan eager loading fakultas dan prodi di bawahnya
-        $user = User::with(['fakultas' => function ($query) {
-            $query->with(['prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif']);
-        }])
+        // Cari user via Eloquent dengan eager loading fakultas, prodi, dan unit kerja
+        $user = User::with([
+            'fakultas' => function ($query) {
+                $query->with(['prodi:id,id_fakultas,nama_prodi,periode_mulai_aktif']);
+            },
+            'unitKerja.kategori:id,nama_kategori',
+        ])
             ->where('username', $credentials['username'])
             ->first();
 
@@ -75,15 +78,22 @@ class AuthController extends Controller
             'message' => 'Login berhasil.',
             'data'    => [
                 'user' => [
-                    'id'          => $user->id,
-                    'username'    => $user->username,
-                    'role'        => $user->role,
-                    'id_fakultas' => $user->id_fakultas,
-                    'is_active'   => $user->is_active,
-                    'fakultas'    => $user->fakultas,
+                    'id'            => $user->id,
+                    'username'      => $user->username,
+                    'role'          => $user->role,
+                    'jabatan'       => $user->jabatan,
+                    'id_fakultas'   => $user->id_fakultas,
+                    'id_unit_kerja' => $user->id_unit_kerja,
+                    'unit_kerja'    => $user->unitKerja ? [
+                        'id'            => $user->unitKerja->id,
+                        'nama_unit'     => $user->unitKerja->nama_unit,
+                        'kategori_unit' => $user->unitKerja->kategori?->nama_kategori ?? $user->unitKerja->kategori_unit,
+                    ] : null,
+                    'is_active'     => $user->is_active,
+                    'fakultas'      => $user->fakultas,
                     // Field kompatibilitas transisi
-                    'id_prodi'    => $user->id_prodi,
-                    'prodi'       => $firstProdi ? [
+                    'id_prodi'      => $user->id_prodi,
+                    'prodi'         => $firstProdi ? [
                         'id'         => $firstProdi->id,
                         'nama_prodi' => $firstProdi->nama_prodi,
                     ] : null,
