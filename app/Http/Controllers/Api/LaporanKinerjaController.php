@@ -31,6 +31,7 @@ class LaporanKinerjaController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
+            'periode_id'     => ['nullable', 'integer', 'exists:periode_akademik,id'],
             'id_periode'     => ['nullable', 'integer', 'exists:periode_akademik,id'],
             'id_unit_kerja'  => ['nullable', 'integer', 'exists:unit_kerja,id'],
             'kategori_unit'  => ['nullable', 'string'],
@@ -49,7 +50,7 @@ class LaporanKinerjaController extends Controller
                     'periodeAkademik:id,nama_periode,status_aktif,status_pelaporan,is_default',
                 ]);
 
-            // Tenant Isolation (Proteksi IDOR)
+            // Tenant Isolation (Proteksi IDOR) untuk Admin, Pimpinan, dan Staf
             if ($user->role === 'admin') {
                 if ($request->filled('id_unit_kerja')) {
                     $query->where('id_unit_kerja', (int) $request->input('id_unit_kerja'));
@@ -62,7 +63,7 @@ class LaporanKinerjaController extends Controller
                     });
                 }
             } else {
-                // Non-admin wajib dibatasi hanya pada id_unit_kerja miliknya sendiri
+                // Non-admin (Pimpinan & Staf) wajib dibatasi hanya pada id_unit_kerja miliknya sendiri
                 if (! $user->id_unit_kerja) {
                     return response()->json([
                         'status'  => 'error',
@@ -73,8 +74,15 @@ class LaporanKinerjaController extends Controller
                 $query->where('id_unit_kerja', (int) $user->id_unit_kerja);
             }
 
-            if ($request->filled('id_periode')) {
-                $query->where('id_periode', (int) $request->input('id_periode'));
+            // Filter Periode Dinamis (Berlaku untuk Admin, Pimpinan, dan Staf)
+            $periodeId = $request->query('periode_id') ?? $request->input('id_periode');
+            if ($periodeId !== null && $periodeId !== '') {
+                $query->where('id_periode', (int) $periodeId);
+            } else {
+                $periodeAktif = PeriodeAkademik::where('status_aktif', true)->first();
+                if ($periodeAktif) {
+                    $query->where('id_periode', (int) $periodeAktif->id);
+                }
             }
 
             if ($request->filled('bulan_laporan')) {

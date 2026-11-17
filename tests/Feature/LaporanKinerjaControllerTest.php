@@ -264,4 +264,85 @@ class LaporanKinerjaControllerTest extends TestCase
         $excelRes->assertStatus(200)
             ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
+
+    public function test_index_filters_dynamically_by_periode_id_and_defaults_to_active_period_for_all_roles(): void
+    {
+        // Buat 1 periode historis (tidak aktif)
+        $periodeLama = PeriodeAkademik::firstOrCreate(
+            ['nama_periode' => '2025/2026 Genap Testing'],
+            [
+                'status_aktif'     => false,
+                'status_pelaporan' => 'Tutup',
+                'is_default'       => false,
+            ]
+        );
+        $periodeLama->update(['status_aktif' => false]);
+
+        $pimpinanBiro = User::updateOrCreate(
+            ['username' => 'pimpinan_biro_periode_test'],
+            [
+                'password'      => 'password123',
+                'role'          => 'biro',
+                'jabatan'       => 'pimpinan',
+                'id_unit_kerja' => $this->unitBiro->id,
+                'is_active'     => true,
+            ]
+        );
+
+        // Buat laporan di periode aktif dan periode lama
+        $laporanAktifBiro = LaporanKinerja::create([
+            'id_unit_kerja'      => $this->unitBiro->id,
+            'id_periode'         => $this->periode->id,
+            'nama_kegiatan'      => 'Kegiatan Periode Aktif Biro',
+            'uraian'             => 'Uraian aktif.',
+            'nama_penandatangan' => 'Kepala Biro',
+        ]);
+
+        $laporanLamaBiro = LaporanKinerja::create([
+            'id_unit_kerja'      => $this->unitBiro->id,
+            'id_periode'         => $periodeLama->id,
+            'nama_kegiatan'      => 'Kegiatan Periode Lama Biro',
+            'uraian'             => 'Uraian lama.',
+            'nama_penandatangan' => 'Kepala Biro',
+        ]);
+
+        $laporanLamaLab = LaporanKinerja::create([
+            'id_unit_kerja'      => $this->unitLab->id,
+            'id_periode'         => $periodeLama->id,
+            'nama_kegiatan'      => 'Kegiatan Periode Lama Lab',
+            'uraian'             => 'Uraian lama lab.',
+            'nama_penandatangan' => 'Kepala Lab',
+        ]);
+
+        // 1. Staf (userBiro): tanpa ?periode_id -> default ke periode aktif; dengan ?periode_id=lama -> melihat riwayat unitnya
+        Sanctum::actingAs($this->userBiro, ['biro']);
+        $stafDefault = $this->getJson('/api/laporan-kinerja');
+        $stafDefault->assertStatus(200);
+        $this->assertContains($laporanAktifBiro->id, collect($stafDefault->json('data'))->pluck('id')->all());
+        $this->assertNotContains($laporanLamaBiro->id, collect($stafDefault->json('data'))->pluck('id')->all());
+
+        $stafLama = $this->getJson("/api/laporan-kinerja?periode_id={$periodeLama->id}");
+        $stafLama->assertStatus(200);
+        $this->assertEquals([$laporanLamaBiro->id], collect($stafLama->json('data'))->pluck('id')->all());
+
+        // 2. Pimpinan (pimpinanBiro): dengan ?periode_id=lama -> hanya melihat riwayat unitnya (tidak melihat Lab)
+        Sanctum::actingAs($pimpinanBiro, ['biro']);
+        $pimpinanLama = $this->getJson("/api/laporan-kinerja?periode_id={$periodeLama->id}");
+        $pimpinanLama->assertStatus(200);
+        $this->assertEquals([$laporanLamaBiro->id], collect($pimpinanLama->json('data'))->pluck('id')->all());
+
+        // 3. Admin: dengan ?periode_id=lama -> melihat seluruh unit (Biro dan Lab) pada periode tersebut
+        Sanctum::actingAs($this->admin, ['admin']);
+        $adminLama = $this->getJson("/api/laporan-kinerja?periode_id={$periodeLama->id}");
+        $adminLama->assertStatus(200);
+        $adminLamaIds = collect($adminLama->json('data'))->pluck('id')->all();
+        $this->assertContains($laporanLamaBiro->id, $adminLamaIds);
+        $this->assertContains($laporanLamaLab->id, $adminLamaIds);
+        $this->assertNotContains($laporanAktifBiro->id, $adminLamaIds);
+
+        // Cleanup
+        LaporanKinerja::whereIn('id', [$laporanAktifBiro->id, $laporanLamaBiro->id, $laporanLamaLab->id])->delete();
+        User::where('username', 'pimpinan_biro_periode_test')->delete();
+        $periodeLama->delete();
+    }
 }
