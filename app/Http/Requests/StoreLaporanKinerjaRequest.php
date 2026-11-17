@@ -39,6 +39,7 @@ class StoreLaporanKinerjaRequest extends FormRequest
         $textFields = [
             'bulan_laporan',
             'nama_kegiatan',
+            'ringkasan_pelaksanaan',
             'uraian',
             'kendala',
             'dukungan',
@@ -139,6 +140,7 @@ class StoreLaporanKinerjaRequest extends FormRequest
             'tindak_lanjut_json' => ['nullable', 'array'],
 
             // Kolom Teks Pendek
+            'ringkasan_pelaksanaan' => ['nullable', 'string'],
             'kesimpulan'         => ['nullable', 'string'],
             'rekomendasi'        => ['nullable', 'string'],
 

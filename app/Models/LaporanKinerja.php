@@ -47,6 +47,7 @@ class LaporanKinerja extends Model
         'bulan_laporan',
         'status_laporan',
         'identitas_laporan',
+        'ringkasan_pelaksanaan',
         'pembahasan_json',
         'kendala_json',
         'dukungan_json',

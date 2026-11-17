@@ -31,6 +31,7 @@ class UpdateLaporanKinerjaRequest extends FormRequest
         $textFields = [
             'bulan_laporan',
             'nama_kegiatan',
+            'ringkasan_pelaksanaan',
             'uraian',
             'kendala',
             'dukungan',
@@ -128,6 +129,7 @@ class UpdateLaporanKinerjaRequest extends FormRequest
             'kendala_json'       => ['nullable', 'array'],
             'dukungan_json'      => ['nullable', 'array'],
             'tindak_lanjut_json' => ['nullable', 'array'],
+            'ringkasan_pelaksanaan' => ['nullable', 'string'],
             'kesimpulan'         => ['nullable', 'string'],
             'rekomendasi'        => ['nullable', 'string'],
 

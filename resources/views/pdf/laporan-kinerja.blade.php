@@ -126,6 +126,7 @@
         /* C, D, E, F. Tabel Data Dinamis dengan Header Hijau Gelap & Teks Putih */
         .table-matrix {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin-bottom: 4px;
             page-break-inside: avoid;
@@ -139,6 +140,7 @@
             vertical-align: middle;
             border: 1px solid #2F4F4F;
             padding: 6px 6px;
+            word-wrap: break-word;
         }
         .table-matrix td {
             border: 1px solid #333333;
@@ -147,6 +149,7 @@
             text-align: left;
             font-size: 9.5pt;
             word-wrap: break-word;
+            word-break: break-word;
             color: #111111;
         }
         .table-matrix td.col-no {
@@ -334,10 +337,11 @@
             ?? ($identitas['nama_penyusun'] ?? '-'));
 
         // Ringkasan Pelaksanaan (Bagian B)
-        $ringkasanPelaksanaan = $identitas['ringkasan_pelaksanaan']
+        $ringkasanPelaksanaan = $laporan->ringkasan_pelaksanaan
+            ?? ($identitas['ringkasan_pelaksanaan']
             ?? ($identitas['ringkasan']
             ?? ($laporan->uraian
-            ?? ($pembahasanList[0]['uraian'] ?? '-')));
+            ?? ($pembahasanList[0]['uraian'] ?? '-'))));
 
         // Tanggal Pengesahan
         $tanggalPengesahanPimpinan = $identitas['tanggal_pengesahan_pimpinan']

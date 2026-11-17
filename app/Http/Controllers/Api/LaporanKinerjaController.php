@@ -173,13 +173,15 @@ class LaporanKinerjaController extends Controller
                     'status'             => LaporanKinerja::STATUS_REVIEW,
 
                     // Kolom Dinamis JSON & Teks
-                    'identitas_laporan'  => $validatedData['identitas_laporan'] ?? null,
-                    'pembahasan_json'    => $validatedData['pembahasan_json'] ?? null,
-                    'kendala_json'       => $validatedData['kendala_json'] ?? null,
-                    'dukungan_json'      => $validatedData['dukungan_json'] ?? null,
-                    'tindak_lanjut_json' => $validatedData['tindak_lanjut_json'] ?? null,
-                    'kesimpulan'         => $validatedData['kesimpulan'] ?? null,
-                    'rekomendasi'        => $validatedData['rekomendasi'] ?? null,
+                    'identitas_laporan'     => $validatedData['identitas_laporan'] ?? null,
+                    'ringkasan_pelaksanaan' => $validatedData['ringkasan_pelaksanaan']
+                        ?? ($validatedData['identitas_laporan']['ringkasan_pelaksanaan'] ?? null),
+                    'pembahasan_json'       => $validatedData['pembahasan_json'] ?? null,
+                    'kendala_json'          => $validatedData['kendala_json'] ?? null,
+                    'dukungan_json'         => $validatedData['dukungan_json'] ?? null,
+                    'tindak_lanjut_json'    => $validatedData['tindak_lanjut_json'] ?? null,
+                    'kesimpulan'            => $validatedData['kesimpulan'] ?? null,
+                    'rekomendasi'           => $validatedData['rekomendasi'] ?? null,
 
                     // Kolom Tanda Tangan Penyusun
                     'ttd_penyusun_path'  => $ttdPenyusunPath,
@@ -412,6 +414,7 @@ class LaporanKinerjaController extends Controller
                 // Update kolom JSON & teks pendek apabila dikirim
                 $dynamicFields = [
                     'identitas_laporan',
+                    'ringkasan_pelaksanaan',
                     'pembahasan_json',
                     'kendala_json',
                     'dukungan_json',

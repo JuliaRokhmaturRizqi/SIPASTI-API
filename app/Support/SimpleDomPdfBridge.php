@@ -183,9 +183,9 @@ class SimpleDomPdfBridge
         $kategoriUnit      = strtoupper((string) ($laporan?->unitKerja?->kategori?->nama_kategori ?? $laporan?->unitKerja?->kategoriUnit?->nama_kategori ?? $laporan?->unitKerja?->kategori_unit ?? 'UNIT'));
         $namaPeriode       = (string) ($laporan?->periodeAkademik?->nama_periode ?? '-');
         $bulanLaporan      = (string) ($laporan?->bulan_laporan ?? '');
-        $namaKegiatan      = (string) ($laporan?->nama_kegiatan ?? '-');
+        $namaKegiatan      = (string) ($laporan?->nama_kegiatan ?? ($laporan?->identitas_laporan['nama_kegiatan'] ?? '-'));
         $statusValidasi    = (string) ($laporan?->status ?? 'Review');
-        $uraian            = (string) ($laporan?->uraian ?? '-');
+        $uraian            = (string) ($laporan?->ringkasan_pelaksanaan ?? ($laporan?->uraian ?? ($laporan?->identitas_laporan['ringkasan_pelaksanaan'] ?? '-')));
         $kendala           = (string) (($laporan?->kendala ?: 'Tidak ada kendala yang dilaporkan.'));
         $dukungan          = (string) (($laporan?->dukungan ?: '-'));
         $tindakLanjut      = (string) (($laporan?->tindak_lanjut ?: '-'));
