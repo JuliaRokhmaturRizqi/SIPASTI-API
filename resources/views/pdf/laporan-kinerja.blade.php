@@ -5,7 +5,7 @@
     <title>Format Laporan Pembahasan Kendala Dukungan Tindak Lanjut - {{ $laporan->unitKerja->nama_unit ?? 'Unit Kerja' }}</title>
     <style>
         @page {
-            margin: 1.8cm 1.8cm 2.2cm 1.8cm;
+            margin: 1.2cm 1.8cm 2.2cm 1.8cm;
         }
 
         body {
@@ -15,6 +15,57 @@
             color: #111111;
             margin: 0;
             padding: 0;
+        }
+
+        /* Kop Surat Dinamis / Fallback Statis */
+        .kop-surat {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+        .kop-surat-img {
+            width: 100%;
+            height: auto;
+            max-height: 130px;
+            display: block;
+            margin: 0 auto 4px auto;
+        }
+        .kop-surat-static {
+            width: 100%;
+            border-bottom: 3px solid #111111;
+            padding-bottom: 6px;
+            margin-bottom: 2px;
+            text-align: center;
+        }
+        .kop-garis-tipis {
+            border-bottom: 1px solid #111111;
+            margin-bottom: 10px;
+        }
+        .kop-yayasan {
+            font-size: 10pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .kop-universitas {
+            font-size: 14pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #2F4F4F;
+            margin: 2px 0;
+        }
+        .kop-sistem {
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 2px 0;
+        }
+        .kop-alamat {
+            font-size: 8.5pt;
+            font-style: italic;
+            color: #333333;
+            margin: 2px 0 0 0;
         }
 
         /* Judul Utama di Bagian Paling Atas (Tengah) */
@@ -363,6 +414,25 @@
                 <td style="text-align: right; width: 30%;"><span class="page-number"></span></td>
             </tr>
         </table>
+    </div>
+
+    <!-- KOP SURAT DINAMIS (GAMBAR UPLOAD) ATAU STATIS (FALLBACK) -->
+    <div class="kop-surat">
+        @if(!empty($laporan->kop_surat_path) || !empty($kopSuratBase64))
+            <img
+                src="{{ !empty($kopSuratBase64) ? $kopSuratBase64 : public_path('storage/' . $laporan->kop_surat_path) }}"
+                alt="Kop Surat"
+                class="kop-surat-img"
+            >
+        @else
+            <div class="kop-surat-static">
+                <p class="kop-yayasan">Yayasan Pondok Pesantren Nurul Huda Sukaraja</p>
+                <p class="kop-universitas">Universitas Nurul Huda (UNUHA)</p>
+                <p class="kop-sistem">Sistem Informasi Pelaporan Akademik &amp; Kinerja Terpadu (SIPASTI)</p>
+                <p class="kop-alamat">Jl. Kotabaru Sukaraja, Buay Madang, OKU Timur, Sumatera Selatan 32161 | Website: www.unuha.ac.id</p>
+            </div>
+            <div class="kop-garis-tipis"></div>
+        @endif
     </div>
 
     <!-- JUDUL ATAS -->

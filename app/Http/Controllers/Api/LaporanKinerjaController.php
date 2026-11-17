@@ -160,11 +160,12 @@ class LaporanKinerjaController extends Controller
             }
         }
 
-        // Tangani Upload Tanda Tangan Digital Staf Penyusun (ttd_penyusun_path)
+        // Tangani Upload Tanda Tangan Digital Staf Penyusun (ttd_penyusun_path) & Kop Surat Dinamis
         $ttdPenyusunPath = $this->handleTtdUpload($request, null, 'penyusun');
+        $kopSuratPath    = $this->handleKopSuratUpload($request);
 
         try {
-            $laporan = DB::transaction(function () use ($validatedData, $idUnitKerja, $bulanLaporan, $ttdPenyusunPath) {
+            $laporan = DB::transaction(function () use ($validatedData, $idUnitKerja, $bulanLaporan, $ttdPenyusunPath, $kopSuratPath) {
                 $payload = [
                     'id_unit_kerja'      => (int) $idUnitKerja,
                     'id_periode'         => (int) $validatedData['id_periode'],
@@ -183,8 +184,9 @@ class LaporanKinerjaController extends Controller
                     'kesimpulan'            => $validatedData['kesimpulan'] ?? null,
                     'rekomendasi'           => $validatedData['rekomendasi'] ?? null,
 
-                    // Kolom Tanda Tangan Penyusun
+                    // Kolom Tanda Tangan Penyusun & Kop Surat
                     'ttd_penyusun_path'  => $ttdPenyusunPath,
+                    'kop_surat_path'     => $kopSuratPath,
 
                     // Kolom Legacy / Kompatibilitas
                     'nama_kegiatan'      => $validatedData['nama_kegiatan'] ?? null,
@@ -402,13 +404,15 @@ class LaporanKinerjaController extends Controller
         }
 
         $ttdPenyusunPath = $this->handleTtdUpload($request, $laporan->ttd_penyusun_path, 'penyusun');
+        $kopSuratPath    = $this->handleKopSuratUpload($request, $laporan->kop_surat_path);
 
         try {
-            DB::transaction(function () use ($laporan, $validated, $user, $targetBulan, $targetPeriode, $ttdPenyusunPath) {
+            DB::transaction(function () use ($laporan, $validated, $user, $targetBulan, $targetPeriode, $ttdPenyusunPath, $kopSuratPath) {
                 $payload = [
                     'id_periode'         => $targetPeriode,
                     'bulan_laporan'      => $targetBulan,
                     'ttd_penyusun_path'  => $ttdPenyusunPath,
+                    'kop_surat_path'     => $kopSuratPath,
                 ];
 
                 // Update kolom JSON & teks pendek apabila dikirim
@@ -735,9 +739,10 @@ class LaporanKinerjaController extends Controller
         $dateObj      = $laporan->created_at ?? now();
         $tanggalCetak = $dateObj->format('d') . ' ' . ($bulanIndo[(int) $dateObj->format('n')] ?? $dateObj->format('F')) . ' ' . $dateObj->format('Y');
 
-        // Render TTD Penyusun & Pimpinan menjadi Base64 Data URI agar 100% aman di DOMPDF
+        // Render TTD Penyusun, Pimpinan, & Kop Surat menjadi Base64 Data URI agar 100% aman di DOMPDF
         $ttdPenyusunBase64 = $this->resolveTtdToBase64($laporan->ttd_penyusun_path);
         $ttdPimpinanBase64 = $this->resolveTtdToBase64($laporan->ttd_pimpinan_path);
+        $kopSuratBase64    = $this->resolveTtdToBase64($laporan->kop_surat_path);
 
         // Bersihkan karakter ilegal sistem file dari nama file attachment
         $namaUnitClean = preg_replace('/[\/\\\\:*?"<>|]+/', '_', $laporan->unitKerja->nama_unit ?? 'Unit_Kerja');
@@ -749,6 +754,7 @@ class LaporanKinerjaController extends Controller
             'ttdBase64'         => $ttdPenyusunBase64,
             'ttdPenyusunBase64' => $ttdPenyusunBase64,
             'ttdPimpinanBase64' => $ttdPimpinanBase64,
+            'kopSuratBase64'    => $kopSuratBase64,
         ])
             ->setPaper('a4', 'portrait')
             ->download('Laporan_Kinerja_' . $namaUnitClean . '.pdf');
@@ -834,6 +840,30 @@ class LaporanKinerjaController extends Controller
 
         if (! empty($existingInputPath) && is_string($existingInputPath)) {
             return $existingInputPath;
+        }
+
+        return $currentPath;
+    }
+
+    /**
+     * Helper untuk memproses upload gambar Kop Surat Dinamis.
+     * Menyimpan berkas ke disk 'public' direktori 'kop_surat' dan mengembalikan relative path-nya.
+     */
+    protected function handleKopSuratUpload(Request $request, ?string $currentPath = null): ?string
+    {
+        $file = $request->file('kop_surat');
+
+        if ($file && $file->isValid()) {
+            if ($currentPath && Storage::disk('public')->exists($currentPath)) {
+                Storage::disk('public')->delete($currentPath);
+            }
+
+            $filename = 'kop_surat_' . Str::random(24) . '.' . $file->getClientOriginalExtension();
+            return $file->storeAs('kop_surat', $filename, 'public');
+        }
+
+        if ($request->filled('kop_surat_path') && is_string($request->input('kop_surat_path'))) {
+            return $request->input('kop_surat_path');
         }
 
         return $currentPath;

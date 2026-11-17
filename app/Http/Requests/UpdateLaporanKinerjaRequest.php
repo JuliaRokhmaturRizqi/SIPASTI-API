@@ -142,7 +142,7 @@ class UpdateLaporanKinerjaRequest extends FormRequest
             'tindak_lanjut'      => ['nullable', 'string'],
             'nama_penandatangan' => ['required_without:identitas_laporan', 'nullable', 'string', 'max:255'],
 
-            // TTD
+            // TTD & Kop Surat Dinamis
             'ttd_penyusun'       => ['nullable'],
             'ttd_penyusun_path'  => ['nullable', 'string', 'max:255'],
             'ttd_image'          => ['nullable'],
@@ -150,6 +150,8 @@ class UpdateLaporanKinerjaRequest extends FormRequest
             'tanda_tangan'       => ['nullable'],
             'ttd_base64'         => ['nullable', 'string'],
             'ttd_image_path'     => ['nullable', 'string', 'max:255'],
+            'kop_surat'          => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],
+            'kop_surat_path'     => ['nullable', 'string', 'max:255'],
 
             'status_laporan'     => ['nullable', 'string', Rule::in(
                 ['menunggu_pimpinan', 'revisi_pimpinan', 'menunggu_admin', 'revisi_admin', 'selesai']
@@ -178,6 +180,9 @@ class UpdateLaporanKinerjaRequest extends FormRequest
             'link_bukti.url'                      => 'Format link bukti tidak valid (harus diawali http:// atau https://).',
             'nama_penandatangan.required_without' => 'Nama penandatangan wajib diisi.',
             'nama_penandatangan.max'              => 'Nama penandatangan maksimal 255 karakter.',
+            'kop_surat.image'                     => 'File kop surat harus berupa gambar yang valid.',
+            'kop_surat.mimes'                     => 'Format kop surat harus berupa jpeg, png, atau jpg.',
+            'kop_surat.max'                       => 'Ukuran file kop surat maksimal 2 MB.',
             'status.in'                           => 'Status laporan harus salah satu dari: Review, Revisi, atau Selesai.',
         ];
     }

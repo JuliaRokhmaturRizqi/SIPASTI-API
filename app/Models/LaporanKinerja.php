@@ -56,6 +56,7 @@ class LaporanKinerja extends Model
         'rekomendasi',
         'ttd_penyusun_path',
         'ttd_pimpinan_path',
+        'kop_surat_path',
         // Kolom legacy/kompatibilitas
         'nama_kegiatan',
         'uraian',

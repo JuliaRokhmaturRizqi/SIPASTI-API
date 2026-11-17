@@ -7,6 +7,7 @@ use App\Models\LaporanKinerja;
 use App\Models\PeriodeAkademik;
 use App\Models\UnitKerja;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -349,5 +350,81 @@ class ApprovalWorkflowModelTest extends TestCase
         LaporanKinerja::whereIn('id_unit_kerja', [$unitA->id, $unitB->id])->delete();
         User::whereIn('username', ['staf_unit_a_test', 'pimpinan_unit_a_test', 'pimpinan_unit_b_test'])->delete();
         UnitKerja::whereIn('id', [$unitA->id, $unitB->id])->delete();
+    }
+
+    public function test_kop_surat_dinamis_upload_validation_and_pdf_rendering(): void
+    {
+        Storage::fake('public');
+
+        $kategori = KategoriUnit::firstOrCreate(['nama_kategori' => 'Biro']);
+        $unit     = UnitKerja::firstOrCreate(
+            ['nama_unit' => 'Biro Kop Surat Test'],
+            ['id_kategori' => $kategori->id]
+        );
+
+        $periode = PeriodeAkademik::firstOrCreate(
+            ['nama_periode' => '2026/2027 Ganjil'],
+            ['status_aktif' => true, 'status_pelaporan' => 'Buka']
+        );
+        $periode->update(['status_aktif' => true, 'status_pelaporan' => 'Buka']);
+
+        $staf = User::updateOrCreate(
+            ['username' => 'staf_kop_test'],
+            [
+                'password'      => 'password123',
+                'role'          => 'biro',
+                'jabatan'       => 'staf',
+                'id_unit_kerja' => $unit->id,
+                'is_active'     => true,
+            ]
+        );
+
+        LaporanKinerja::where('id_unit_kerja', $unit->id)->delete();
+
+        Sanctum::actingAs($staf, ['biro']);
+
+        // 1. Validasi gagal jika kop_surat bukan file gambar
+        $invalidFile = UploadedFile::fake()->create('dokumen.pdf', 100, 'application/pdf');
+        $this->post('/api/laporan-kinerja', [
+            'id_periode'        => $periode->id,
+            'identitas_laporan' => json_encode(['penyusun' => 'Staf Kop']),
+            'pembahasan_json'   => json_encode([['aspek' => 'Pengujian Kop']]),
+            'kop_surat'         => $invalidFile,
+        ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['kop_surat']);
+
+        // 2. Sukses upload kop_surat gambar (PNG) saat store
+        $kopImage = UploadedFile::fake()->image('kop_resmi.png', 1000, 180);
+        $storeRes = $this->post('/api/laporan-kinerja', [
+            'id_periode'        => $periode->id,
+            'bulan_laporan'     => 'Desember',
+            'identitas_laporan' => json_encode([
+                'nama_unit'        => $unit->nama_unit,
+                'penanggung_jawab' => 'Kepala Biro Test',
+                'penyusun'         => 'Staf Kop Test',
+            ]),
+            'pembahasan_json'   => json_encode([
+                ['aspek' => 'Pengujian Kop Surat', 'realisasi' => '100%'],
+            ]),
+            'kop_surat'         => $kopImage,
+        ], ['Accept' => 'application/json']);
+
+        $storeRes->assertStatus(201);
+        $laporanId   = $storeRes->json('data.id');
+        $kopSuratPath = $storeRes->json('data.kop_surat_path');
+
+        $this->assertNotNull($kopSuratPath);
+        Storage::disk('public')->assertExists($kopSuratPath);
+
+        // 3. Cetak PDF dengan kop surat dinamis -> 200 OK application/pdf
+        $pdfRes = $this->get("/api/laporan-kinerja/{$laporanId}/pdf");
+        $pdfRes->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        // Cleanup
+        LaporanKinerja::where('id_unit_kerja', $unit->id)->delete();
+        User::where('username', 'staf_kop_test')->delete();
+        UnitKerja::where('id', $unit->id)->delete();
     }
 }
